@@ -184,8 +184,11 @@ class SettingsActivity : Activity() {
             "Modo noite" to "Tela",
             "Tela e terminal" to "Tela",
             "Diagnóstico" to "Sistema",
+            "Cópia dos treinos" to "Sistema",
             "Atualizações" to "Sistema"
         )
+        private const val REQ_EXPORT = 701
+        private const val REQ_IMPORT = 702
         /** Volta na mesma aba ao reabrir (ex.: depois de treinar a voz). */
         private var lastTab = "Conexão"
     }
@@ -567,6 +570,25 @@ class SettingsActivity : Activity() {
         note("Recomendado para o Redmi fixo na parede: após ativar, aperte o botão Home e escolha " +
             "“Jarvis Home” como padrão. Assim o Jarvis volta sozinho depois de reiniciar, já com o microfone liberado.")
 
+        section("Cópia dos treinos")
+        note("Leva para outro celular: vozes do “Hey Tony” de cada um, comandos de luz treinados, luzes da planta, " +
+            "vocabulário, treino físico e as demais configurações. Salve o arquivo onde quiser (Downloads, Google Drive…).")
+        button("Exportar treinos e configurações") {
+            save()
+            AlertDialog.Builder(this).setTitle("Exportar")
+                .setMessage("Incluir o token do Home Assistant?\n\nCom o token, o celular novo já conecta sozinho, " +
+                    "mas quem tiver o arquivo consegue controlar a casa. Sem o token, você cola o token no celular novo.")
+                .setPositiveButton("Sem token") { _, _ -> startExport(false) }
+                .setNeutralButton("Com token") { _, _ -> startExport(true) }
+                .setNegativeButton("Cancelar", null).show()
+        }
+        button("Importar de um arquivo") {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+            try { startActivityForResult(i, REQ_IMPORT) } catch (e: Exception) {
+                Toast.makeText(this, "Não achei um app de arquivos", Toast.LENGTH_LONG).show()
+            }
+        }
+
         section("Diagnóstico")
         diag = note("")
         micBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
@@ -729,6 +751,60 @@ class SettingsActivity : Activity() {
             JLog.w("Diálogo de bateria indisponível", e)
         }
         startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+    }
+
+    private var exportWithToken = false
+
+    private fun startExport(withToken: Boolean) {
+        exportWithToken = withToken
+        val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json").putExtra(Intent.EXTRA_TITLE, br.com.jarvishome.settings.Backup.fileName())
+        try { startActivityForResult(i, REQ_EXPORT) } catch (e: Exception) {
+            Toast.makeText(this, "Não achei um app de arquivos", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (resultCode != RESULT_OK || uri == null) return
+        when (requestCode) {
+            REQ_EXPORT -> Thread {
+                val msg = try {
+                    val text = br.com.jarvishome.settings.Backup.export(this, exportWithToken)
+                    contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                    JLog.i("Cópia exportada" + if (exportWithToken) " (com token)" else "")
+                    "Cópia salva. Guarde o arquivo" + if (exportWithToken) " em lugar seguro (tem o token)." else "."
+                } catch (e: Throwable) {
+                    JLog.w("Falha ao exportar", e); "Não consegui salvar: " + (e.message ?: e.javaClass.simpleName)
+                }
+                handler.post { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+            }.start()
+            REQ_IMPORT -> AlertDialog.Builder(this).setTitle("Importar cópia")
+                .setMessage("Isso substitui os treinos e as configurações deste celular pelos do arquivo. Continuar?")
+                .setPositiveButton("Importar") { _, _ ->
+                    Thread {
+                        val result = try {
+                            val text = contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
+                            val s = br.com.jarvishome.settings.Backup.import(this, text)
+                            "Cópia de ${s.from} restaurada: ${s.prefs} configurações, ${s.files} arquivo(s) de voz" +
+                                (if (s.token) ", com o token." else ". Confira o token na aba Conexão.")
+                        } catch (e: Throwable) {
+                            JLog.w("Falha ao importar", e)
+                            handler.post {
+                                Toast.makeText(this, "Não consegui importar: " + (e.message ?: e.javaClass.simpleName), Toast.LENGTH_LONG).show()
+                            }
+                            null
+                        }
+                        if (result != null) handler.post {
+                            JarvisForegroundService.send(this, JarvisForegroundService.ACTION_RELOAD)
+                            AlertDialog.Builder(this).setTitle("Pronto").setMessage(result)
+                                .setPositiveButton("OK") { _, _ -> recreate() }.setCancelable(false).show()
+                        }
+                    }.start()
+                }
+                .setNegativeButton("Cancelar", null).show()
+        }
     }
 
     private fun showCommands() {
