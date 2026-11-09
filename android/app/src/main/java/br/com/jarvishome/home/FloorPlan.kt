@@ -30,9 +30,10 @@ object FloorPlan {
     private fun p(x: Number, y: Number) = floatArrayOf(x.toFloat(), y.toFloat())
 
     val zones: List<Zone> = listOf(
-        Zone("estar", "Sala de estar", listOf(r(0, 0, 2.15, 1.62), r(2.15, 0, 5.75, 3.6)), listOf(p(3.95, 2.0)), p(3.9, 1.6),
+        // a sala de jantar fica em cima (com a entrada) e a de estar embaixo
+        Zone("estar", "Sala de estar", listOf(r(2.15, 3.6, 5.55, 8.07)), listOf(p(3.85, 5.8)), p(3.85, 5.9),
             listOf("estar", "sala", "living", "tv"), avoid = listOf("jantar", "mesa")),
-        Zone("jantar", "Jantar", listOf(r(2.15, 3.6, 5.55, 8.07)), listOf(p(3.85, 5.8)), p(3.85, 5.9),
+        Zone("jantar", "Jantar", listOf(r(0, 0, 2.15, 1.62), r(2.15, 0, 5.75, 3.6)), listOf(p(3.95, 2.0)), p(3.9, 1.6),
             listOf("jantar", "mesa")),
         Zone("cozinha", "Cozinha", listOf(r(0, 1.62, 2.15, 7.12)), listOf(p(1.05, 3.3), p(1.05, 6.3)), p(1.05, 4.6),
             listOf("cozinha", "servico", "lavanderia", "area")),
@@ -51,10 +52,10 @@ object FloorPlan {
         r(0, 0, 10.35, 0), r(10.35, 0, 10.35, 7.22), r(7.2, 7.22, 10.35, 7.22), r(7.2, 7.22, 7.2, 8.07),
         r(2.15, 8.07, 7.2, 8.07), r(2.15, 7.12, 2.15, 8.07), r(0, 7.12, 2.15, 7.12), r(0, 0, 0, 7.12),
         r(0, 1.62, 2.15, 1.62),      // entrada | cozinha
-        r(2.15, 3.9, 2.15, 7.12),    // cozinha | jantar (aberta em cima)
-        r(5.75, 0, 5.75, 2.7),       // sala | quarto 1 (porta embaixo)
+        r(2.15, 3.9, 2.15, 7.12),    // cozinha | sala de estar (aberta em cima)
+        r(5.75, 0, 5.75, 2.7),       // jantar | quarto 1 (porta embaixo)
         r(6.9, 3.6, 10.35, 3.6),     // quarto 1 | corredor e quarto 2
-        r(5.55, 4.82, 5.55, 8.07),   // jantar | banheiro
+        r(5.55, 4.82, 5.55, 8.07),   // sala de estar | banheiro
         r(6.3, 4.82, 7.2, 4.82),     // corredor | banheiro
         r(7.2, 4.5, 7.2, 7.22)       // banheiro | quarto 2
     )
