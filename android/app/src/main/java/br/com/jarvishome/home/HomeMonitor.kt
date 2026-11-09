@@ -28,6 +28,14 @@ object HomeMonitor {
     @Volatile private var agendaDirty = true
     @Volatile private var lastAgendaAt = 0L
     @Volatile private var failures = 0
+    // diagnóstico da leitura automática
+    @Volatile private var startedAt = 0L
+    @Volatile private var tickStart = 0L
+    @Volatile private var tickEnd = 0L
+    @Volatile private var lastOkAt = 0L
+    @Volatile private var ticks = 0
+    @Volatile private var oks = 0
+    @Volatile private var stage = ""
     private var lastAnnounceText: String? = null
     private var lastAnnounceAt = 0L
     private val remindedKeys = HashSet<String>()
@@ -44,8 +52,9 @@ object HomeMonitor {
         agendaDirty = true
         CalendarAssistant.onChange = { refreshAgendaSoon() }
         br.com.jarvishome.commands.LightCommands.onChange = { refreshSoon() }
-        val e = Executors.newSingleThreadScheduledExecutor()
+        val e = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "jarvis-casa").apply { isDaemon = true } }
         exec = e
+        startedAt = System.currentTimeMillis(); tickStart = 0; tickEnd = 0
         e.scheduleWithFixedDelay({ safeTick() }, 0, 5, TimeUnit.SECONDS)
         JLog.i("Monitor da casa iniciado")
     }
@@ -65,14 +74,46 @@ object HomeMonitor {
     }
 
     private fun safeTick() {
-        try { tick() } catch (t: Throwable) { JLog.w("Monitor da casa", t) }
+        tickStart = System.currentTimeMillis()
+        ticks++
+        try {
+            tick()
+        } catch (t: Throwable) {
+            // qualquer falha aparece na tela e no diagnóstico (antes só ia para o log)
+            HomeModel.lastError = "erro interno em \"$stage\": " + describe(t)
+            HomeModel.notifyListeners()
+            JLog.w("Monitor da casa", t)
+        } finally {
+            tickEnd = System.currentTimeMillis()
+        }
+    }
+
+    /** Chamado pelo serviço de tempos em tempos: se a leitura travou ou nunca rodou, recomeça. */
+    fun watchdog(context: Context) {
+        if (exec == null) return
+        val now = System.currentTimeMillis()
+        val stuck = tickStart > 0 && tickEnd < tickStart && now - tickStart > 45_000
+        val neverRan = tickStart == 0L && startedAt > 0 && now - startedAt > 30_000
+        val stale = lastOkAt > 0 && now - lastOkAt > 120_000 && now - tickEnd > 30_000
+        if (stuck || neverRan || stale) {
+            val why = if (stuck) "travou em \"$stage\" há ${(now - tickStart) / 1000}s" else if (neverRan) "não começou" else "parou de ler"
+            JLog.w("Monitor da casa $why; reiniciando")
+            HomeModel.lastError = "leitura $why (reiniciada)"
+            HomeModel.notifyListeners()
+            start(context)
+        }
     }
 
     private fun tick() {
+        stage = "configuração"
         val p = prefs ?: return
+        stage = "token"
         val api = HomeApi(p.serverUrl, p.token)
         val snap = try {
-            HomeParser.parse(api.states(), p.serverTempLimit.toDouble(), 90.0, p.serverSensorIds())
+            stage = "lendo estados"
+            val states = api.states()
+            stage = "interpretando"
+            HomeParser.parse(states, p.serverTempLimit.toDouble(), 90.0, p.serverSensorIds())
         } catch (e: Exception) {
             failures++
             HomeModel.lastError = describe(e)
@@ -81,7 +122,11 @@ object HomeMonitor {
             return
         }
         failures = 0
+        oks++
+        lastOkAt = System.currentTimeMillis()
+        stage = "atualizando a tela"
         HomeModel.update(snap)
+        stage = "avisos"
 
         val text = snap.announcement
         val entity = snap.announcementEntity
@@ -101,6 +146,7 @@ object HomeMonitor {
 
         if (p.calendarEnabled && snap.calendars.isNotEmpty() &&
             (agendaDirty || System.currentTimeMillis() - lastAgendaAt > 5 * 60_000)) {
+            stage = "agenda"
             try {
                 val start = LocalDateTime.now().toLocalDate().atStartOfDay()
                 HomeModel.setAgenda(api.events(snap.calendars.map { it.entityId }, start, start.plusDays(15)))
@@ -113,8 +159,11 @@ object HomeMonitor {
             }
         }
 
+        stage = "lembretes"
         if (p.calendarEnabled && p.agendaReminders) checkReminders(p)
+        stage = "atualizações"
         appContext?.let { br.com.jarvishome.update.UpdateFlow.autoCheck(it) }
+        stage = "fim"
     }
 
     /** Texto curto para mostrar ao usuário. */
@@ -170,8 +219,15 @@ object HomeMonitor {
             if (snap.calendars.none { it.canCreate }) sb.append("   → Nenhuma aceita marcar: adicione o Calendário local.\n")
         }
         sb.append(if (snap.hasAnnouncementEntity) "✓ Auxiliar de avisos encontrado\n" else "• Auxiliar input_text.jarvis_aviso ainda não criado (avisos)\n")
-        sb.append("Monitor: ").append(if (exec != null) "rodando" else "parado").append(" · ")
-            .append(HomeModel.lastError?.let { "último erro: $it" } ?: "sem erros")
+        val now = System.currentTimeMillis()
+        fun ago(t: Long) = if (t == 0L) "nunca" else "há ${(now - t) / 1000}s"
+        sb.append("Leitura automática: ").append(if (exec != null) "ligada" else "parada")
+            .append(" · $ticks leituras, $oks com sucesso\n")
+            .append("   última: ").append(ago(tickStart)).append(if (tickStart > 0 && tickEnd < tickStart) " (ainda rodando: $stage)" else "")
+            .append(" · último sucesso: ").append(ago(lastOkAt)).append('\n')
+            .append("   tela: ").append(if (HomeModel.online) "conectada" else "desconectada")
+            .append(" · ").append(HomeModel.calendars.size).append(" agenda(s), ").append(HomeModel.lights.size).append(" luz(es)\n")
+            .append(HomeModel.lastError?.let { "Último erro: $it" } ?: "Sem erros")
         return sb.toString()
     }
 

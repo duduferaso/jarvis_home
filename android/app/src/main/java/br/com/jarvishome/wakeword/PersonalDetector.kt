@@ -126,7 +126,7 @@ object VoiceFeatures {
         val out = Array(keep.size) { logMel[keep[it]].copyOf() }
         val mean = FloatArray(N_MELS)
         for (row in out) for (m in 0 until N_MELS) mean[m] += row[m]
-        for (m in 0 until N_MELS) mean[m] /= max(1, out.size)
+        for (m in 0 until N_MELS) mean[m] = mean[m] / max(1, out.size)
         for (row in out) {
             var norm = 0.0
             for (m in 0 until N_MELS) { row[m] -= mean[m]; norm += (row[m] * row[m]).toDouble() }

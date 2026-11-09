@@ -356,7 +356,7 @@ object CalendarParser {
             if (m <= 0) m += 24 * 60
             m
         } ?: 60
-        return When(date, time, dur)
+        return When(date!!, time, dur)
     }
 
     private fun title(t: Toks): String {

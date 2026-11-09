@@ -728,6 +728,7 @@ class JarvisForegroundService : Service() {
     private val healthLoop = object : Runnable {
         override fun run() {
             healthExecutor.execute { StateBus.setConnection(Backends.create(prefs).health()) }
+            HomeMonitor.watchdog(this@JarvisForegroundService)
             val next = if (StateBus.connection == ConnectionState.CONNECTED) 20000L else 6000L
             main.postDelayed(this, next)
         }

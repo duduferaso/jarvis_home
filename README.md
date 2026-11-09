@@ -142,7 +142,7 @@ VERSION_CODE=5 VERSION_NAME=1.3.0 ANDROID_JAR=/caminho/android-33.jar KOTLINC=/c
 cd ../tests && KOTLINC=/caminho/kotlinc/bin/kotlinc ./test_direto.sh
 ```
 
-Requisitos estão no topo do `build.sh`. Use sempre o mesmo `android/jarvis-release.jks`: o Android só atualiza o app se a chave for a mesma. Aumente o `VERSION_CODE` a cada versão.
+Requisitos estão no topo do `build.sh`. **Use o Kotlin 1.9.25**: a biblioteca do Kotlin 2.x usa `invokedynamic`, que o `dalvik-exchange` não converte e o Android não tem (o app quebrava com `NoSuchMethodError metafactory`); o `build.sh` barra isso. Use sempre o mesmo `android/jarvis-release.jks`: o Android só atualiza o app se a chave for a mesma. Aumente o `VERSION_CODE` a cada versão.
 
 
 ## Atualizações pelo app (1.7)
