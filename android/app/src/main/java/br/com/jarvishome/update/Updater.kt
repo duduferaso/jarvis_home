@@ -74,6 +74,18 @@ object Updater {
 
     fun latest(repo: String, token: String): Release? {
         val base = rawBase(repo)
+        // 1º: API do GitHub (sem o cache de até 5 min dos servidores de arquivos)
+        try {
+            val a = open("https://api.github.com/repos/${repo.trim().trim('/')}/contents/versao.json?ref=$BRANCH",
+                token, "application/vnd.github.raw+json")
+            try {
+                if (a.responseCode == 200) return parseManifest(JSONObject(a.inputStream.bufferedReader().use { it.readText() }), base)
+            } finally {
+                a.disconnect()
+            }
+        } catch (_: Exception) {
+            // limite da API ou sem rede para ela: usa o arquivo direto
+        }
         val m = open("$base/versao.json?t=" + System.currentTimeMillis() / 60000, token, "application/json")
         try {
             val code = m.responseCode

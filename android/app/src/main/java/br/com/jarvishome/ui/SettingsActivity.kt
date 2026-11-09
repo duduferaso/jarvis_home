@@ -52,6 +52,7 @@ class SettingsActivity : Activity() {
     private lateinit var scroll: ScrollView
     private lateinit var bottomBar: LinearLayout
     private val tabs = LinkedHashMap<String, LinearLayout>()
+    private var tabBox: LinearLayout? = null
     private val chips = HashMap<String, TextView>()
     private val handler = Handler(Looper.getMainLooper())
     private var player: AudioPlayer? = null
@@ -110,8 +111,35 @@ class SettingsActivity : Activity() {
         volume = prefs.volume
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(8, 10, 12))
+            setBackgroundColor(Color.rgb(6, 8, 10))
         }
+        // cabeçalho
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(18), dp(20), dp(4))
+        }
+        head.addView(TextView(this).apply {
+            text = "CONFIGURAÇÕES"
+            setTextColor(cyan)
+            textSize = 15f
+            letterSpacing = 0.25f
+            typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        head.addView(TextView(this).apply {
+            text = "v" + (try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" })
+            setTextColor(Color.argb(140, 200, 230, 235))
+            textSize = 12f
+        })
+        head.addView(TextView(this).apply {
+            text = "✕"
+            setTextColor(Color.argb(170, 200, 230, 235))
+            textSize = 18f
+            setPadding(dp(18), dp(6), 0, dp(6))
+            contentDescription = "Fechar"
+            setOnClickListener { finish() }
+        })
+        root.addView(head)
         tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), dp(12), dp(12), dp(8)) }
         root.addView(android.widget.HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -174,6 +202,7 @@ class SettingsActivity : Activity() {
             chips[name] = chip
             box
         }
+        tabBox = form
     }
 
     private fun selectTab(name: String) {
@@ -194,16 +223,29 @@ class SettingsActivity : Activity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
+    /** Título da seção + um cartão onde entram os campos seguintes. */
     private fun section(title: String) {
         SECTION_TAB[title]?.let { tab(it) }
-        form.addView(TextView(this).apply {
+        val box = tabBox ?: form
+        box.addView(TextView(this).apply {
             text = title.uppercase(Locale("pt", "BR"))
             setTextColor(cyan)
             textSize = 12f
             letterSpacing = 0.2f
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(26), 0, dp(6))
+            setPadding(dp(4), dp(22), 0, dp(8))
         })
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(10), dp(16), dp(14))
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.rgb(13, 21, 25))
+                setStroke(dp(1), Color.argb(40, 34, 229, 255))
+            }
+        }
+        box.addView(card)
+        form = card
     }
 
     private fun note(text: String): TextView {
@@ -220,7 +262,7 @@ class SettingsActivity : Activity() {
     private fun field(label: String, value: String, hintText: String, type: Int): EditText {
         form.addView(TextView(this).apply {
             text = label
-            setTextColor(Color.WHITE)
+            setTextColor(Color.rgb(232, 246, 248))
             textSize = 14f
             setPadding(0, dp(8), 0, 0)
         })
@@ -229,7 +271,7 @@ class SettingsActivity : Activity() {
             hint = hintText
             inputType = type
             setTextColor(Color.WHITE)
-            setHintTextColor(Color.GRAY)
+            setHintTextColor(Color.rgb(94, 122, 128))
         }
         form.addView(et)
         return et
@@ -521,7 +563,7 @@ class SettingsActivity : Activity() {
         diag = note("")
         micBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
         form.addView(micBar, LinearLayout.LayoutParams(-1, dp(14)))
-        note("Barra = nível do microfone em tempo real. Fale “Jarvis” e veja se “Última ativação” muda.")
+        note("Barra = nível do microfone em tempo real. Fale “Hey Tony” e veja se “Última ativação” muda.")
         button("Simular ativação (sem wake word)") {
             JarvisForegroundService.send(this, JarvisForegroundService.ACTION_LISTEN)
             finish()
@@ -560,6 +602,12 @@ class SettingsActivity : Activity() {
         val save = Button(this).apply {
             text = "Salvar"
             isAllCaps = false
+            setTextColor(Color.BLACK)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+                setColor(cyan)
+            }
             setOnClickListener {
                 save()
                 finish()
