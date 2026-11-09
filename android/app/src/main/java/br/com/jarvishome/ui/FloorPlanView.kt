@@ -153,23 +153,15 @@ class FloorPlanView(context: Context) : View(context) {
             c.drawLine(px(w[0], w[1]), py(w[0], w[1], wallH), px(w[2], w[3]), py(w[2], w[3], wallH), stroke)
         }
 
-        // pontos de luz e nomes
-        for (z in FloorPlan.zones) {
-            val g = glow[z.id] ?: 0f
-            val has = states[z.id] != null
-            for (l in z.lightPoints) {
-                fill.color = if (g > 0.5f) Color.rgb(255, 241, 200) else Color.rgb(34, 229, 255)
-                fill.alpha = ((if (g > 0.5f) 255 else if (has) 130 else 50) * a).toInt()
-                c.drawCircle(px(l[0], l[1]), py(l[0], l[1]), dp(if (g > 0.5f) 3.2f else 2.2f), fill)
-            }
-        }
         // nomes por cima de tudo, numa etiqueta (legível sobre piso aceso ou parede)
         for (z in FloorPlan.zones) {
+            if (!z.showLabel) continue
             val g = glow[z.id] ?: 0f
             val has = states[z.id] != null
             val lit = g > 0.5f
+            // nome centralizado no cômodo
             val cx = px(z.label[0], z.label[1])
-            val cy = py(z.label[0], z.label[1]) + text.textSize * 1.35f
+            val cy = py(z.label[0], z.label[1]) + text.textSize * 0.35f
             val w = text.measureText(z.name) / 2 + dp(6f)
             val top = cy - text.textSize * 0.95f
             val bottom = cy + text.textSize * 0.38f

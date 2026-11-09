@@ -21,7 +21,8 @@ object FloorPlan {
         val lightPoints: List<FloatArray>,    // x, y (pontos de luz da planta elétrica)
         val label: FloatArray,                // x, y
         val keywords: List<String>,           // para achar a luz pelo nome
-        val avoid: List<String> = emptyList()
+        val avoid: List<String> = emptyList(),
+        val showLabel: Boolean = true
     ) {
         fun contains(x: Float, y: Float) = rects.any { x >= it[0] && x <= it[2] && y >= it[1] && y <= it[3] }
     }
@@ -31,19 +32,20 @@ object FloorPlan {
 
     val zones: List<Zone> = listOf(
         // a sala de jantar fica em cima (com a entrada) e a de estar embaixo
-        Zone("estar", "Sala de estar", listOf(r(2.15, 3.6, 5.55, 8.07)), listOf(p(3.85, 5.8)), p(3.85, 5.9),
+        Zone("estar", "Sala de estar", listOf(r(2.15, 3.6, 5.55, 8.07)), listOf(p(3.85, 5.8)), p(3.85, 5.84),
             listOf("estar", "sala", "living", "tv"), avoid = listOf("jantar", "mesa")),
-        Zone("jantar", "Jantar", listOf(r(0, 0, 2.15, 1.62), r(2.15, 0, 5.75, 3.6)), listOf(p(3.95, 2.0)), p(3.9, 1.6),
+        Zone("jantar", "Jantar", listOf(r(0, 0, 2.15, 1.62), r(2.15, 0, 5.75, 3.6)), listOf(p(3.95, 2.0)), p(3.95, 1.8),
             listOf("jantar", "mesa")),
-        Zone("cozinha", "Cozinha", listOf(r(0, 1.62, 2.15, 7.12)), listOf(p(1.05, 3.3), p(1.05, 6.3)), p(1.05, 4.6),
+        Zone("cozinha", "Cozinha", listOf(r(0, 1.62, 2.15, 7.12)), listOf(p(1.05, 3.3), p(1.05, 6.3)), p(1.075, 4.37),
             listOf("cozinha", "servico", "lavanderia", "area")),
-        Zone("corredor", "Corredor", listOf(r(5.55, 3.6, 7.2, 4.82)), listOf(p(6.4, 4.2)), p(6.4, 4.2),
-            listOf("corredor", "hall", "circulacao")),
-        Zone("banheiro", "Banheiro", listOf(r(5.55, 4.82, 7.2, 8.07)), listOf(p(6.35, 6.45)), p(6.35, 6.5),
+        // corredor: sem luz nem automação, fica sem nome (só o piso)
+        Zone("corredor", "Corredor", listOf(r(5.55, 3.6, 7.2, 4.82)), emptyList(), p(6.4, 4.2),
+            listOf("corredor", "hall", "circulacao"), showLabel = false),
+        Zone("banheiro", "Banheiro", listOf(r(5.55, 4.82, 7.2, 8.07)), listOf(p(6.35, 6.45)), p(6.375, 6.45),
             listOf("banheiro", "banho", "wc", "lavabo")),
-        Zone("quarto1", "Quarto 1", listOf(r(5.75, 0, 10.35, 3.6)), listOf(p(8.05, 1.85)), p(8.05, 1.9),
+        Zone("quarto1", "Quarto 1", listOf(r(5.75, 0, 10.35, 3.6)), listOf(p(8.05, 1.85)), p(8.05, 1.8),
             listOf("quarto 1", "suite", "casal", "principal", "master")),
-        Zone("quarto2", "Quarto 2", listOf(r(7.2, 3.6, 10.35, 7.22)), listOf(p(8.75, 5.4)), p(8.75, 5.45),
+        Zone("quarto2", "Quarto 2", listOf(r(7.2, 3.6, 10.35, 7.22)), listOf(p(8.75, 5.4)), p(8.775, 5.41),
             listOf("quarto 2", "visita", "hospede", "escritorio", "bebe", "filho", "filha", "solteiro"))
     )
 
