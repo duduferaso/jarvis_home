@@ -1,0 +1,66 @@
+import br.com.jarvishome.commands.Timers
+import br.com.jarvishome.commands.Timers.Cmd
+import java.time.LocalDateTime
+
+var fl = 0
+fun ok(c: Boolean, m: String) { if (!c) fl++; println((if (c) "PASSOU " else "FALHOU ") + m) }
+val NOW: LocalDateTime = LocalDateTime.of(2026, 11, 8, 22, 10)
+fun p(s: String, ringing: Boolean = false, has: Boolean = false) = Timers.parse(s, NOW, ringing, has, false)
+fun t(s: String, sec: Long, label: String = "") { val c = p(s); ok(c == Cmd.SetTimer(sec, label), "\"$s\" -> $c") }
+
+fun main() {
+    println("-- timers")
+    t("alarme de 5 minutos", 300)
+    t("Timer de 5 minutos.", 300)
+    t("coloca um timer de 10 minutos", 600)
+    t("timer de 10 minutos para o arroz", 600, "arroz")
+    t("timer do arroz de 12 minutos", 720, "arroz")
+    t("temporizador de uma hora e meia", 5400)
+    t("timer de meia hora", 1800)
+    t("timer de dois minutos e trinta segundos", 150)
+    t("timer de 2 minutos e meio", 150)
+    t("timer de vinte e cinco minutos", 1500)
+    t("timer de 1h30", 5400)
+    t("me avisa em 20 minutos", 1200)
+    t("me lembra em 10 minutos de tirar o bolo", 600, "tirar o bolo")
+    t("me avisa daqui a 15 minutos", 900)
+    t("cronômetro de 30 segundos", 30)
+    t("alarme de 1 hora", 3600)
+    println("-- alarme por horário")
+    ok(p("alarme para as 7 horas") == Cmd.SetAlarm(LocalDateTime.of(2026, 11, 9, 7, 0), ""), "\"alarme para as 7 horas\" -> amanhã 7:00: ${p("alarme para as 7 horas")}")
+    ok(p("me acorda às 6 e meia") == Cmd.SetAlarm(LocalDateTime.of(2026, 11, 9, 6, 30), ""), "\"me acorda às 6 e meia\" -> ${p("me acorda às 6 e meia")}")
+    ok(p("alarme às 23 horas") == Cmd.SetAlarm(LocalDateTime.of(2026, 11, 8, 23, 0), ""), "\"alarme às 23 horas\" -> hoje: ${p("alarme às 23 horas")}")
+    ok(p("me acorda amanhã às 7 da manhã") == Cmd.SetAlarm(LocalDateTime.of(2026, 11, 9, 7, 0), ""), "\"me acorda amanhã às 7 da manhã\" -> ${p("me acorda amanhã às 7 da manhã")}")
+    ok(p("alarme às 10 da noite") == Cmd.SetAlarm(LocalDateTime.of(2026, 11, 8, 22, 0).plusDays(1), ""), "\"alarme às 10 da noite\" (já passou hoje) -> ${p("alarme às 10 da noite")}")
+    println("-- perguntas, cancelar, parar")
+    ok(p("quanto falta no timer?") is Cmd.Query, "quanto falta no timer")
+    ok(p("quanto tempo falta", has = true) is Cmd.Query, "quanto tempo falta (com timer ligado)")
+    ok(p("quanto tempo falta", has = false) == null, "quanto tempo falta (sem timer) segue adiante")
+    ok(p("cancela o timer") == Cmd.Cancel("", false), "cancela o timer: ${p("cancela o timer")}")
+    ok(p("cancela o timer do arroz") == Cmd.Cancel("arroz", false), "cancela o timer do arroz: ${p("cancela o timer do arroz")}")
+    ok((p("cancela todos os timers") as? Cmd.Cancel)?.all == true, "cancela todos os timers")
+    ok(p("para o alarme") is Cmd.Cancel, "para o alarme (sem tocar) = cancelar")
+    ok(p("para", ringing = true) == Cmd.Stop, "para (tocando)")
+    ok(p("chega", ringing = true) == Cmd.Stop, "chega (tocando)")
+    ok(p("desliga o alarme", ringing = true) == Cmd.Stop, "desliga o alarme (tocando)")
+    ok(p("timer") == Cmd.AskDuration, "\"timer\" sozinho pergunta de quanto tempo")
+    println("-- não é timer")
+    for (s in listOf("liga a luz do quarto", "me lembra amanhã às 9 de ligar pro médico", "marca dentista amanhã às 15h",
+            "que horas são", "para", "desliga a luz da sala", "o que eu tenho amanhã"))
+        ok(p(s) == null, "\"$s\" -> ${p(s)}")
+    println("-- respostas e lista")
+    Timers.clear()
+    val base = 1_000_000L
+    ok(Timers.handle("timer de 5 minutos", NOW, base)?.speech == "5 minutos, começando agora.", "fala ao criar: ${Timers.handle("quanto falta", NOW, base + 60_000)?.speech}")
+    Timers.handle("timer de 10 minutos para o arroz", NOW, base)
+    ok(Timers.handle("quanto falta para o arroz", NOW, base + 125_000)?.speech == "Faltam 7 minutos e 55 segundos para arroz.", "quanto falta para o arroz: ${Timers.handle("quanto falta para o arroz", NOW, base + 125_000)?.speech}")
+    ok(Timers.due(base + 299_000).isEmpty(), "ainda não tocou aos 4:59")
+    val d = Timers.due(base + 300_000)
+    ok(d.size == 1 && Timers.finishedPhrase(d[0]) == "Seu timer de 5 minutos acabou.", "toca aos 5:00: ${d.map { Timers.finishedPhrase(it) }}")
+    ok(Timers.handle("chega", NOW, base + 301_000)?.speech == "Ok." && !Timers.isRinging() && Timers.all().size == 1, "\"chega\" para o que está tocando e mantém o arroz")
+    val saved = Timers.encode(); Timers.clear(); Timers.restore(saved)
+    ok(Timers.all().size == 1 && Timers.all()[0].label == "arroz", "salva e recarrega a lista")
+    ok(Timers.handle("cancela o timer do arroz", NOW, base)?.speech == "Timer arroz cancelado.", "cancela: ${Timers.all().size}")
+    ok(Timers.clock(272) == "04:32" && Timers.clock(3725) == "1:02:05", "relógio da tela")
+    println(if (fl == 0) "TODOS PASSARAM" else "$fl FALHARAM"); if (fl > 0) System.exit(1)
+}

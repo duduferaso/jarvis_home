@@ -82,6 +82,18 @@ fun main() {
     stt(base, "Liga a luz da sala.")
     ok(bt.transcribeAudio(ByteArray(64000)) == "Liga a luz da sala.", "transcribeAudio devolve o texto do Whisper")
 
+    println("1e) \"Hey Tony, alarme de 5 minutos\" vira timer no app")
+    br.com.jarvishome.commands.Timers.clear()
+    stt(base, "Ei Tony, alarme de 5 minutos.")
+    val e1e = session(bt, 3)
+    ok(e1e.any { it.optString("type") == "response" && it.optString("text") == "5 minutos, começando agora." }, "resposta do timer")
+    ok(br.com.jarvishome.commands.Timers.all().size == 1, "timer criado")
+    ok(e1e.any { it.optString("type") == "audio" }, "resposta falada pela voz do HA")
+    stt(base, "Tony, quanto falta?")
+    val q = session(bt, 3).firstOrNull { it.optString("type") == "response" }?.optString("text") ?: ""
+    ok(q.startsWith("Faltam 4 minutos") || q.startsWith("Faltam 5 minutos"), "quanto falta: $q")
+    br.com.jarvishome.commands.Timers.clear()
+
     println("1b) Whisper ouve \"Jarvis, consultar gastos da.\" e a casa não entende")
     stt(base, "Jarvis, consultar gastos da.")
     val e1b = session(b, 10)

@@ -104,6 +104,11 @@ class Prefs(context: Context) {
         get() = sp.getLong("last_update_check", 0L)
         set(v) = sp.edit().putLong("last_update_check", v).apply()
 
+    /** Timers e alarmes ligados (para sobreviver a um reinício do app). */
+    var timers: String
+        get() = sp.getString("timers", "[]") ?: "[]"
+        set(v) = sp.edit().putString("timers", v).apply()
+
     var silenceMs: Int
         get() = sp.getInt("silence_ms", 900)
         set(v) = sp.edit().putInt("silence_ms", v.coerceIn(400, 2500)).apply()

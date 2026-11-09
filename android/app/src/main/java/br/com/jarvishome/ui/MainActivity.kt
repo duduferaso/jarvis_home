@@ -23,6 +23,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import br.com.jarvishome.calendar.AgendaFormat
+import br.com.jarvishome.commands.Timers
 import br.com.jarvishome.domain.AssistantState
 import br.com.jarvishome.domain.ConnectionState
 import br.com.jarvishome.domain.JLog
@@ -57,6 +58,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     private lateinit var connDot: View
     private lateinit var connLabel: TextView
     private lateinit var banner: TextView
+    private lateinit var timerView: TextView
     private lateinit var infoBox: LinearLayout
     private lateinit var alertView: TextView
     private lateinit var agendaBox: LinearLayout
@@ -148,6 +150,17 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             setOnClickListener { HomeModel.dismissAnnouncement() }
         }
         top.addView(banner, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        timerView = text(22f, cyan).apply {
+            visibility = View.GONE
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(12).toFloat()
+                setColor(Color.argb(30, 34, 229, 255))
+            }
+            setOnClickListener { Timers.stopRinging() }
+        }
+        top.addView(timerView, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(10) })
         root.addView(top, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
 
         // ---------------- base: informação (em espera) + estado da conversa
@@ -216,6 +229,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         StateBus.addListener(this)
         HomeModel.addListener(this)
         handler.post(tick)
+        handler.post(timerTick)
         applyWindowPrefs()
         ensurePermissionsThenStart()
         HomeMonitor.refreshSoon()
@@ -225,6 +239,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         StateBus.removeListener(this)
         HomeModel.removeListener(this)
         handler.removeCallbacks(tick)
+        handler.removeCallbacks(timerTick)
         super.onPause()
     }
 
@@ -241,6 +256,12 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     /** No modo noite, o primeiro toque só acende a tela (não aciona o Jarvis sem querer). */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            if (Timers.isRinging()) { // qualquer toque para o alarme
+                Timers.stopRinging()
+                swallowGesture = true
+                refreshTimers()
+                return true
+            }
             if (nightDim) {
                 wake(60_000)
                 swallowGesture = true
@@ -258,6 +279,38 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     private fun wake(ms: Long) {
         awakeUntil = System.currentTimeMillis() + ms
         refreshNight()
+    }
+
+    /** Contagem regressiva dos timers (atualiza a cada meio segundo). */
+    private val timerTick = object : Runnable {
+        override fun run() {
+            refreshTimers()
+            handler.postDelayed(this, 500)
+        }
+    }
+
+    private fun refreshTimers() {
+        val now = System.currentTimeMillis()
+        val ringing = Timers.ringing()
+        val list = Timers.all().filter { it.ringingSince == 0L }
+        when {
+            ringing.isNotEmpty() -> {
+                timerView.visibility = View.VISIBLE
+                val blink = (now / 500) % 2 == 0L
+                timerView.setTextColor(if (blink) amber else Color.WHITE)
+                timerView.text = "⏰ " + Timers.finishedPhrase(ringing[0]).removeSuffix(".") + "  ·  toque para parar"
+                if (nightDim) wake(60_000)
+            }
+            list.isNotEmpty() -> {
+                timerView.visibility = View.VISIBLE
+                timerView.setTextColor(if (nightDim) Color.argb(110, 34, 229, 255) else cyan)
+                timerView.text = list.take(3).joinToString("   ") { i ->
+                    if (i.kind == Timers.Kind.ALARM) "⏰ " + java.text.SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(Date(i.endsAt))
+                    else "⏱ " + Timers.clock(maxOf(0L, (i.endsAt - now + 999) / 1000)) + (if (i.label.isNotEmpty()) " " + i.label else "")
+                } + if (list.size > 3) "  +${list.size - 3}" else ""
+            }
+            else -> timerView.visibility = View.GONE
+        }
     }
 
     private val tick = object : Runnable {

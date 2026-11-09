@@ -2,6 +2,7 @@ package br.com.jarvishome.network
 
 import br.com.jarvishome.calendar.CalendarAssistant
 import br.com.jarvishome.commands.LightCommands
+import br.com.jarvishome.commands.Timers
 import br.com.jarvishome.domain.ConnectionState
 import br.com.jarvishome.domain.JLog
 import br.com.jarvishome.home.HomeApi
@@ -306,6 +307,21 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
 
             // ---- Etapa 2: limpar e corrigir com os nomes da casa
             var text = TextCorrector.stripWakeWord(heard, backend.wakeNames)
+
+            // Timers e alarmes: no próprio app (funcionam sem internet).
+            if (text.isNotBlank()) {
+                val reply = try { Timers.handle(text) } catch (e: Exception) { JLog.w("Timer", e); null }
+                if (reply != null) {
+                    JLog.i("Timer: “$text” → “${reply.speech}”")
+                    onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "timer"))
+                    onEvent(JSONObject().put("type", "response").put("text", reply.speech)
+                        .put("response_type", if (reply.done) "action_done" else "query_answer")
+                        .put("continue_conversation", reply.continueConversation))
+                    val url = try { HaDirectBackend.speakOn(socket, 5, backend.pipelineId, reply.speech) } catch (e: Exception) { null }
+                    if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
+                    return
+                }
+            }
 
             // Agenda: respondida pelo próprio app (antes da correção, para manter o título como foi falado).
             if (backend.calendarEnabled && text.isNotBlank()) {

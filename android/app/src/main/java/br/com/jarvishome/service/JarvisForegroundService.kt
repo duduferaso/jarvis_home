@@ -23,6 +23,7 @@ import br.com.jarvishome.audio.AudioPlayer
 import br.com.jarvishome.audio.VoiceActivityDetector
 import br.com.jarvishome.domain.AssistantState
 import br.com.jarvishome.domain.ConnectionState
+import br.com.jarvishome.commands.Timers
 import br.com.jarvishome.domain.CommandHistory
 import br.com.jarvishome.domain.JLog
 import br.com.jarvishome.domain.StateBus
@@ -70,6 +71,28 @@ class JarvisForegroundService : Service() {
     private lateinit var prefs: Prefs
     private lateinit var player: AudioPlayer
     private val main = Handler(Looper.getMainLooper())
+    private val beeper = AlarmBeeper()
+
+    /** Timers e alarmes: confere a cada segundo; toca até alguém parar (voz, toque na tela) ou por 3 min. */
+    private val timerLoop = object : Runnable {
+        override fun run() {
+            val now = System.currentTimeMillis()
+            for (i in Timers.due(now)) {
+                JLog.i("Timer acabou: " + Timers.name(i))
+                announce(Timers.finishedPhrase(i))
+            }
+            val ringing = Timers.ringing()
+            when {
+                ringing.isEmpty() -> beeper.stop()
+                ringing.all { now - it.ringingSince > 3 * 60_000 } -> {
+                    JLog.i("Timer: ninguém parou em 3 minutos, silenciando")
+                    Timers.stopRinging(); beeper.stop()
+                }
+                !beeper.playing && (mode == Mode.IDLE || mode == Mode.SLEEPING || now - ringing.minOf { it.ringingSince } > 8000) -> beeper.start()
+            }
+            main.postDelayed(this, 1000)
+        }
+    }
     private val vad = VoiceActivityDetector(900)
     private val lock = Any()
     private var audioThread: Thread? = null
@@ -102,6 +125,9 @@ class JarvisForegroundService : Service() {
         main.post(healthLoop)
         HomeMonitor.onAnnouncement = { text -> main.post { announce(text) } }
         HomeMonitor.start(this)
+        Timers.restore(prefs.timers)
+        Timers.onChange = { prefs.timers = Timers.encode() }
+        main.post(timerLoop)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -147,6 +173,8 @@ class JarvisForegroundService : Service() {
         main.removeCallbacksAndMessages(null)
         session?.cancel()
         stopAudio()
+        beeper.stop()
+        Timers.onChange = null
         player.release()
         sessionExecutor.shutdownNow()
         healthExecutor.shutdownNow()
@@ -398,6 +426,10 @@ class JarvisForegroundService : Service() {
     }
 
     private fun beginListening(reason: String, preRoll: ByteArray?, alreadySpoke: Boolean = false) {
+        if (Timers.stopRinging()) {
+            beeper.stop()
+            JLog.i("Toque do timer parado ($reason)")
+        }
         synchronized(lock) {
             if (mode != Mode.IDLE) return
             JLog.i("Ativado por: $reason")

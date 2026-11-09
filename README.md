@@ -152,3 +152,8 @@ Requisitos estão no topo do `build.sh`. Use sempre o mesmo `android/jarvis-rele
 - Repositório público: não precisa de chave. Privado: cole em ⚙ uma chave *fine-grained* só com **Contents: Read-only** desse repositório (digite `-` no campo para apagar a chave).
 - Para publicar: `VERSION_NAME=1.7.2 VERSION_CODE=14 NOTAS="..." tools/publicar_versao.sh`. O APK publicado sai **sem** o token do Home Assistant (o script confere) e precisa ser assinado com a mesma `jarvis-release.jks`, que **nunca** vai para o repositório (`.gitignore`).
 - A branch `atualizacoes` guarda só a última versão (o script a recria a cada publicação). O nome do APK é `JarvisHome-<versão>-<código>.apk`; o código é o que decide se é mais nova.
+
+
+## Timers e alarmes (1.8)
+
+No próprio app, sem internet: "Hey Tony, timer de 5 minutos" (também "alarme de 5 minutos", "me avisa em 20 minutos"), "timer de 10 minutos para o arroz", "me acorda às 6 e meia" / "alarme para as 7 horas" (sem dizer manhã/tarde, vale o próximo horário), "quanto falta?", "cancela o timer do arroz", "cancela todos os timers". A contagem aparece na tela. Quando acaba, o Jarvis fala e toca "bip-bip-bip" no volume de alarme; para com "Hey Tony" (ou "Hey Tony, para"), com um toque na tela, ou sozinho depois de 3 minutos. A lista sobrevive a um reinício do app. Lógica em `commands/Timers.kt`, testes em `tests/jvm_timers`.
