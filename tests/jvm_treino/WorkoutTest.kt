@@ -72,6 +72,6 @@ fun main() {
     ok(start("treino 5 de 5").startsWith("Treino de 25 minutos: 5 exercícios, 5 séries"), "\"treino 5 de 5\": ${start("treino 5 de 5")}")
     Workout.stop()
     val st = Workout.handle("começa o treino de 20 minutos", p, t0)!!
-    ok(st.openScreen && Workout.plan!!.totalMin == 20, "começar pela voz abre a tela: ${st.speech}")
+    ok(!st.openScreen && Workout.plan!!.totalMin == 20, "começar pela voz não abre tela: ${st.speech}")
     println(if (fl == 0) "TODOS PASSARAM" else "$fl FALHARAM"); if (fl > 0) System.exit(1)
 }

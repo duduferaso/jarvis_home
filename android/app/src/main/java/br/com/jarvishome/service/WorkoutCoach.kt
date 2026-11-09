@@ -74,11 +74,17 @@ class WorkoutCoach(context: Context) {
                     beep(ToneGenerator.TONE_PROP_BEEP2, 500)
                     // começo de série: "Série 2 de 5" (o exercício aparece na tela)
                     val newSeries = s.exerciseCount > 0 && s.exerciseIndex == 1
+                    // só por voz: diz em que exercício e série você está
+                    val ex = when {
+                        s.exercise.isNotEmpty() -> s.exercise + "."
+                        s.exerciseCount > 0 -> "Exercício ${s.exerciseIndex}."
+                        else -> "Rodada ${s.round}."
+                    }
                     val msg = when {
-                        newSeries && s.lap == s.laps && s.laps > 1 -> "Última série!"
-                        newSeries -> "Série ${s.lap} de ${s.laps}."
-                        s.exercise.isNotEmpty() -> s.exercise
-                        else -> ""
+                        newSeries && s.lap == s.laps && s.laps > 1 -> "Última série! $ex"
+                        newSeries -> "Série ${s.lap} de ${s.laps}. $ex"
+                        s.round == s.rounds -> "Último exercício!"
+                        else -> ex
                     }
                     if (msg.isNotEmpty()) main.postDelayed({ say(msg) }, 450)
                 }

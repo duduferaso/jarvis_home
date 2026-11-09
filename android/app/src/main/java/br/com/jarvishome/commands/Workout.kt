@@ -211,7 +211,7 @@ object Workout {
                 val parts = if (q.perSeries > 0) "${q.perSeries} exercícios, ${q.seriesCount} " + (if (q.seriesCount == 1) "série" else "séries")
                     else "${q.rounds} rodadas"
                 Reply("Treino de $min minutos: $parts, ${q.workSec} segundos de execução e ${q.restSec} de descanso. " +
-                    "Começa em $PREP_SEC segundos.", openScreen = true)
+                    "Começa em $PREP_SEC segundos.")
             }
             Cmd.Pause -> { pause(now); Reply("Treino pausado.") }
             Cmd.Resume -> { resume(now); Reply("Continuando.") }

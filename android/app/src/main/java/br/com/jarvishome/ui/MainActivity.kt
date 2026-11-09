@@ -24,6 +24,7 @@ import android.widget.TextView
 import android.widget.Toast
 import br.com.jarvishome.calendar.AgendaFormat
 import br.com.jarvishome.commands.Timers
+import br.com.jarvishome.commands.Workout.Phase as P
 import br.com.jarvishome.domain.AssistantState
 import br.com.jarvishome.domain.ConnectionState
 import br.com.jarvishome.domain.JLog
@@ -216,16 +217,6 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         }
         root.addView(gear, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END))
-        val workout = TextView(this).apply {
-            text = "TREINO"
-            textSize = 12f
-            letterSpacing = 0.2f
-            setTextColor(Color.argb(110, 34, 229, 255))
-            setPadding(dp(18), dp(18), dp(18), dp(16))
-            contentDescription = "Treino"
-            setOnClickListener { startActivity(Intent(this@MainActivity, WorkoutActivity::class.java)) }
-        }
-        root.addView(workout, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START))
         return root
     }
 
@@ -303,9 +294,23 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         val now = System.currentTimeMillis()
         val ringing = Timers.ringing()
         val list = Timers.all().filter { it.ringingSince == 0L }
+        val w = br.com.jarvishome.commands.Workout.state(now)
         when {
+            w != null && ringing.isEmpty() -> {
+                timerView.visibility = View.VISIBLE
+                timerView.textSize = 26f
+                timerView.setTextColor(when { w.paused -> Color.WHITE; w.phase == P.WORK -> Color.rgb(57, 255, 136); else -> cyan })
+                val where = if (w.exerciseCount > 0) "Exercício ${w.exerciseIndex}/${w.exerciseCount} · Série ${w.lap}/${w.laps}" else "Rodada ${w.round}/${w.rounds}"
+                timerView.text = when (w.phase) {
+                    P.PREP -> "Treino começa em ${(w.phaseLeftMs + 999) / 1000}"
+                    P.DONE -> "Treino concluído ✓"
+                    else -> (if (w.paused) "PAUSADO" else if (w.phase == P.WORK) "EXECUÇÃO" else "DESCANSO") +
+                        " ${(w.phaseLeftMs + 999) / 1000}s\n$where · faltam ${br.com.jarvishome.commands.Workout.mmss(w.totalLeftMs)}"
+                }
+            }
             ringing.isNotEmpty() -> {
                 timerView.visibility = View.VISIBLE
+                timerView.textSize = 22f
                 val blink = (now / 500) % 2 == 0L
                 timerView.setTextColor(if (blink) amber else Color.WHITE)
                 timerView.text = "⏰ " + Timers.finishedPhrase(ringing[0]).removeSuffix(".") + "  ·  toque para parar"
@@ -313,6 +318,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             }
             list.isNotEmpty() -> {
                 timerView.visibility = View.VISIBLE
+                timerView.textSize = 22f
                 timerView.setTextColor(if (nightDim) Color.argb(110, 34, 229, 255) else cyan)
                 timerView.text = list.take(3).joinToString("   ") { i ->
                     if (i.kind == Timers.Kind.ALARM) "⏰ " + java.text.SimpleDateFormat("HH:mm", Locale("pt", "BR")).format(Date(i.endsAt))

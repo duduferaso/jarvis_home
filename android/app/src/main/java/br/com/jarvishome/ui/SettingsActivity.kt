@@ -311,6 +311,14 @@ class SettingsActivity : Activity() {
         slider("Volume da resposta", 0, 100, 5, volume, { v -> "$v%" }) { volume = it }
         swBeep = switch("Bipe ao começar a ouvir", prefs.beep)
 
+        section("Treino")
+        note("Por voz: “Hey Tony, treino de 5 exercícios e 5 séries”, “pausa”, “continua”, “quanto falta?”, “para o treino”. " +
+            "Ele avisa a série e o exercício em voz alta; a tela inicial mostra a fase e a contagem.")
+        button("Ajustar o padrão do treino (tempos e quantidades)") {
+            save()
+            startActivity(Intent(this, WorkoutActivity::class.java))
+        }
+
         section("Comandos de luz")
         swLocalLights = switch("Ligar e desligar luzes pelo próprio app", prefs.localLights)
         note("O app entende “liga/desliga/acende/apaga a luz do …” sozinho, tolerando erros do Whisper " +
