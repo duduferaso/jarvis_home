@@ -184,7 +184,7 @@ class SettingsActivity : Activity() {
             "Modo noite" to "Tela",
             "Tela e terminal" to "Tela",
             "Diagnóstico" to "Sistema",
-            "Cópia dos treinos" to "Sistema",
+            "Cópia dos treinos de voz" to "Sistema",
             "Atualizações" to "Sistema"
         )
         private const val REQ_EXPORT = 701
@@ -570,10 +570,14 @@ class SettingsActivity : Activity() {
         note("Recomendado para o Redmi fixo na parede: após ativar, aperte o botão Home e escolha " +
             "“Jarvis Home” como padrão. Assim o Jarvis volta sozinho depois de reiniciar, já com o microfone liberado.")
 
-        section("Cópia dos treinos")
-        note("Leva para outro celular: vozes do “Hey Tony” de cada um, comandos de luz treinados, luzes da planta, " +
-            "vocabulário, treino físico e as demais configurações. Salve o arquivo onde quiser (Downloads, Google Drive…).")
-        button("Exportar treinos e configurações") {
+        section("Cópia dos treinos de voz")
+        note("Leva o treino de voz para outro celular: as vozes do “Hey Tony” de cada pessoa (detector pessoal), " +
+            "os comandos de luz treinados e a calibração. As configurações do app vão junto. " +
+            "Salve o arquivo onde quiser (Downloads, Google Drive…).")
+        val nVoz = br.com.jarvishome.wakeword.PersonalStore.load(this).templates.size
+        val nCmd = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands).size
+        note("Hoje: $nVoz exemplos de voz do “Hey Tony” e $nCmd comandos de luz treinados.")
+        button("Exportar treino de voz") {
             save()
             AlertDialog.Builder(this).setTitle("Exportar")
                 .setMessage("Incluir o token do Home Assistant?\n\nCom o token, o celular novo já conecta sozinho, " +
@@ -787,7 +791,7 @@ class SettingsActivity : Activity() {
                         val result = try {
                             val text = contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
                             val s = br.com.jarvishome.settings.Backup.import(this, text)
-                            "Cópia de ${s.from} restaurada: ${s.prefs} configurações, ${s.files} arquivo(s) de voz" +
+                            "Treino de voz de ${s.from} restaurado (${s.files} arquivo de vozes, ${s.prefs} configurações)" +
                                 (if (s.token) ", com o token." else ". Confira o token na aba Conexão.")
                         } catch (e: Throwable) {
                             JLog.w("Falha ao importar", e)
