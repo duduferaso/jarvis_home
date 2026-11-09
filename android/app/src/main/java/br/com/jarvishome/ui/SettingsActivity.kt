@@ -45,7 +45,14 @@ import java.util.Locale
 class SettingsActivity : Activity() {
 
     private lateinit var prefs: Prefs
+    /** Aba onde os próximos campos entram (cada seção vai para a sua aba). */
     private lateinit var form: LinearLayout
+    private lateinit var content: LinearLayout
+    private lateinit var tabBar: LinearLayout
+    private lateinit var scroll: ScrollView
+    private lateinit var bottomBar: LinearLayout
+    private val tabs = LinkedHashMap<String, LinearLayout>()
+    private val chips = HashMap<String, TextView>()
     private val handler = Handler(Looper.getMainLooper())
     private var player: AudioPlayer? = null
 
@@ -101,23 +108,94 @@ class SettingsActivity : Activity() {
         sensitivity = prefs.sensitivity
         silenceMs = prefs.silenceMs
         volume = prefs.volume
-        val scroll = ScrollView(this)
-        scroll.setBackgroundColor(Color.rgb(8, 10, 12))
-        form = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(16), dp(20), dp(40))
+            setBackgroundColor(Color.rgb(8, 10, 12))
         }
-        scroll.addView(form)
-        setContentView(scroll)
+        tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(dp(12), dp(12), dp(12), dp(8)) }
+        root.addView(android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(tabBar)
+        }, LinearLayout.LayoutParams(-1, -2))
+        scroll = ScrollView(this)
+        content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), 0, dp(20), dp(24))
+        }
+        scroll.addView(content)
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        bottomBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(6), dp(20), dp(14)) }
+        root.addView(bottomBar, LinearLayout.LayoutParams(-1, -2))
+        setContentView(root)
+        TAB_ORDER.forEach { tab(it) }
         build()
-        if (intent?.getBooleanExtra(br.com.jarvishome.update.UpdateFlow.EXTRA_UPDATE, false) == true) {
-            br.com.jarvishome.update.UpdateFlow.run(this)
+        val update = intent?.getBooleanExtra(br.com.jarvishome.update.UpdateFlow.EXTRA_UPDATE, false) == true
+        selectTab(if (update) "Sistema" else lastTab)
+        if (update) br.com.jarvishome.update.UpdateFlow.run(this)
+    }
+
+    // ------------------------------------------------------------------ abas
+
+    companion object {
+        private val TAB_ORDER = listOf("Conexão", "Voz", "Comandos", "Agenda", "Tela", "Sistema")
+        /** Em que aba fica cada seção. */
+        private val SECTION_TAB = mapOf(
+            "Home Assistant (rede local)" to "Conexão",
+            "Assistente" to "Voz",
+            "Chamada por voz: detector pessoal (recomendado)" to "Voz",
+            "Chamada por voz: modelo em inglês (alternativo)" to "Voz",
+            "Avançado: variações da palavra" to "Voz",
+            "Comandos de luz" to "Comandos",
+            "Entender melhor os comandos" to "Comandos",
+            "Treino" to "Comandos",
+            "Agenda" to "Agenda",
+            "Avisos do Home Assistant" to "Agenda",
+            "Informações na tela" to "Tela",
+            "Modo noite" to "Tela",
+            "Tela e terminal" to "Tela",
+            "Diagnóstico" to "Sistema",
+            "Atualizações" to "Sistema"
+        )
+        /** Volta na mesma aba ao reabrir (ex.: depois de treinar a voz). */
+        private var lastTab = "Conexão"
+    }
+
+    private fun tab(name: String) {
+        form = tabs.getOrPut(name) {
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+            content.addView(box)
+            val chip = TextView(this).apply {
+                text = name
+                textSize = 15f
+                setPadding(dp(16), dp(9), dp(16), dp(9))
+                setOnClickListener { selectTab(name) }
+            }
+            tabBar.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(8) })
+            chips[name] = chip
+            box
         }
+    }
+
+    private fun selectTab(name: String) {
+        val n = if (tabs.containsKey(name)) name else TAB_ORDER.first()
+        lastTab = n
+        for ((k, v) in tabs) v.visibility = if (k == n) View.VISIBLE else View.GONE
+        for ((k, c) in chips) {
+            val on = k == n
+            c.setTextColor(if (on) Color.BLACK else cyan)
+            c.typeface = if (on) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+            c.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(18).toFloat()
+                if (on) setColor(cyan) else setStroke(dp(1), Color.argb(120, 34, 229, 255))
+            }
+        }
+        scroll.scrollTo(0, 0)
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     private fun section(title: String) {
+        SECTION_TAB[title]?.let { tab(it) }
         form.addView(TextView(this).apply {
             text = title.uppercase(Locale("pt", "BR"))
             setTextColor(cyan)
@@ -487,7 +565,7 @@ class SettingsActivity : Activity() {
                 finish()
             }
         }
-        form.addView(save, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(28) })
+        bottomBar.addView(save, LinearLayout.LayoutParams(-1, -2))
     }
 
     private fun save() {
