@@ -85,6 +85,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        br.com.jarvishome.domain.CrashLog.install(this)
         Provisioning.apply(this)
         prefs = Prefs(this)
         window.decorView.setBackgroundColor(Color.BLACK)
@@ -458,7 +459,12 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         refreshHome()
     }
 
+    /** Um erro ao desenhar o painel não pode fechar o app: fica no log técnico. */
     private fun refreshHome() {
+        try { refreshHomeInner() } catch (t: Throwable) { JLog.e("Tela inicial", t) }
+    }
+
+    private fun refreshHomeInner() {
         val now = LocalDateTime.now()
         val today = now.toLocalDate()
         val quiet = quietState()
@@ -558,7 +564,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             Thread {
                 try {
                     HomeApi(p.serverUrl, p.token).toggle(l.entityId)
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     JLog.w("Falha ao alternar ${l.entityId}", e)
                     runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${l.name}", Toast.LENGTH_SHORT).show() }
                 }

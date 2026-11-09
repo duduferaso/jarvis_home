@@ -110,6 +110,7 @@ class JarvisForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        br.com.jarvishome.domain.CrashLog.install(this)
         Provisioning.apply(this)
         prefs = Prefs(this)
         player = AudioPlayer(this)

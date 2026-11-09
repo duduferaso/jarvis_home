@@ -578,6 +578,23 @@ class SettingsActivity : Activity() {
             "e em Economia de bateria escolha “Sem restrições”. Trave o app na tela de recentes (cadeado).")
         button("Ver logs técnicos") { showLogs() }
         button("Últimos comandos (o que ele ouviu)") { showCommands() }
+        val crash = br.com.jarvishome.domain.CrashLog.last(this)
+        if (crash != null) button("Ver a última vez que o app fechou sozinho") {
+            AlertDialog.Builder(this).setTitle("Última falha")
+                .setView(ScrollView(this).apply {
+                    addView(TextView(this@SettingsActivity).apply {
+                        text = crash; setTextColor(Color.WHITE); textSize = 11f; setTextIsSelectable(true)
+                        setPadding(dp(16), dp(12), dp(16), dp(12))
+                    })
+                })
+                .setPositiveButton("Fechar", null)
+                .setNeutralButton("Copiar") { _, _ ->
+                    getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("jarvis-falha", crash))
+                    Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Apagar") { _, _ -> br.com.jarvishome.domain.CrashLog.clear(this) }
+                .show()
+        }
 
         section("Avançado: variações da palavra")
         keywordsField = EditText(this).apply {
