@@ -7,14 +7,29 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Atualização pelo GitHub Releases: lê a última versão publicada em github.com/<repo>/releases e
- * baixa o APK. Repositório público dispensa chave; privado usa uma chave só de leitura.
- * O APK publicado é chamado JarvisHome-<versão>-<código>.apk (ex.: JarvisHome-1.7.0-12.apk).
+ * Atualização pelo GitHub: a branch "atualizacoes" do repositório guarda só a última versão
+ * (versao.json + JarvisHome-<versão>-<código>.apk). Se ela não existir, tenta o GitHub Releases.
+ * Repositório público dispensa chave; privado usa uma chave só de leitura. O APK baixado é
+ * conferido pelo SHA-256 do versao.json.
  */
 object Updater {
 
     class Release(val versionCode: Int, val versionName: String, val notes: String,
-                  val assetApiUrl: String, val downloadUrl: String, val size: Long)
+                  val assetApiUrl: String, val downloadUrl: String, val size: Long, val sha256: String = "")
+
+    const val BRANCH = "atualizacoes"
+
+    /** Lê o versao.json da branch de atualizações. */
+    fun parseManifest(m: JSONObject, rawBase: String): Release? {
+        val code = m.optInt("versionCode", 0)
+        val apk = m.optString("apk")
+        if (code <= 0 || !ASSET.matches(apk)) return null
+        val url = "$rawBase/$apk"
+        return Release(code, m.optString("versionName"), m.optString("notes").trim(), url, url,
+            m.optLong("size", 0L), m.optString("sha256").lowercase())
+    }
+
+    fun rawBase(repo: String) = "https://raw.githubusercontent.com/${repo.trim().trim('/')}/$BRANCH"
 
     class HttpError(val code: Int, message: String) : IOException(message)
 
@@ -58,6 +73,19 @@ object Updater {
     }
 
     fun latest(repo: String, token: String): Release? {
+        val base = rawBase(repo)
+        val m = open("$base/versao.json?t=" + System.currentTimeMillis() / 60000, token, "application/json")
+        try {
+            val code = m.responseCode
+            if (code == 200) return parseManifest(JSONObject(m.inputStream.bufferedReader().use { it.readText() }), base)
+            if (code != 404) throw HttpError(code, describe(code, token))
+        } finally {
+            m.disconnect()
+        }
+        return latestRelease(repo, token)
+    }
+
+    private fun latestRelease(repo: String, token: String): Release? {
         val c = open("https://api.github.com/repos/${repo.trim().trim('/')}/releases/latest", token, "application/vnd.github+json")
         try {
             val code = c.responseCode
@@ -102,6 +130,10 @@ object Updater {
                     }
                 }
                 if (r.size > 0 && tmp.length() != r.size) throw IOException("Download incompleto (${tmp.length()} de ${r.size} bytes)")
+                if (r.sha256.isNotEmpty() && sha256(tmp) != r.sha256) {
+                    tmp.delete()
+                    throw IOException("O arquivo baixado não confere (SHA-256 diferente)")
+                }
                 dest.delete()
                 if (!tmp.renameTo(dest)) throw IOException("Não consegui salvar o arquivo")
                 return
@@ -109,5 +141,14 @@ object Updater {
                 c.disconnect()
             }
         }
+    }
+
+    fun sha256(f: File): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        f.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) { val n = input.read(buf); if (n < 0) break; md.update(buf, 0, n) }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
     }
 }

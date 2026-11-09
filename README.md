@@ -147,8 +147,8 @@ Requisitos estão no topo do `build.sh`. Use sempre o mesmo `android/jarvis-rele
 
 ## Atualizações pelo app (1.7)
 
-⚙ > **Atualizações > Procurar atualização**: o app lê a última versão em `github.com/duduferaso/jarvis_home/releases`, baixa o APK e o Android pergunta "Instalar?". Na primeira vez o Android pede para permitir instalar a partir do Jarvis. O app também confere sozinho (no máximo a cada 12 h) e avisa por notificação.
+⚙ > **Atualizações > Procurar atualização**: o app lê `versao.json` na branch `atualizacoes` de `github.com/duduferaso/jarvis_home` (se não existir, tenta o GitHub Releases), baixa o APK, confere o SHA-256 e o Android pergunta "Instalar?". Na primeira vez o Android pede para permitir instalar a partir do Jarvis. O app também confere sozinho (no máximo a cada 12 h) e avisa por notificação.
 
 - Repositório público: não precisa de chave. Privado: cole em ⚙ uma chave *fine-grained* só com **Contents: Read-only** desse repositório (digite `-` no campo para apagar a chave).
-- Para publicar: `VERSION_NAME=1.7.1 VERSION_CODE=13 NOTAS="..." tools/publicar_versao.sh`. O APK publicado sai **sem** o token do Home Assistant (o script confere) e precisa ser assinado com a mesma `jarvis-release.jks`, que **nunca** vai para o repositório (`.gitignore`).
-- O nome do arquivo na release precisa ser `JarvisHome-<versão>-<código>.apk`. O código é o que decide se é mais nova.
+- Para publicar: `VERSION_NAME=1.7.2 VERSION_CODE=14 NOTAS="..." tools/publicar_versao.sh`. O APK publicado sai **sem** o token do Home Assistant (o script confere) e precisa ser assinado com a mesma `jarvis-release.jks`, que **nunca** vai para o repositório (`.gitignore`).
+- A branch `atualizacoes` guarda só a última versão (o script a recria a cada publicação). O nome do APK é `JarvisHome-<versão>-<código>.apk`; o código é o que decide se é mais nova.
