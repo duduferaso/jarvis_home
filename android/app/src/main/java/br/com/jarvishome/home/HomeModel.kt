@@ -32,15 +32,30 @@ object HomeModel {
     @Volatile var lastError: String? = null
     @Volatile var agendaError: String? = null
 
+    /**
+     * Luzes recém-tocadas na tela: o relé/HA pode levar alguns segundos para informar o estado novo.
+     * Até lá (ou até 6 s) a leitura antiga não "desfaz" o toque na tela.
+     */
+    private val pending = java.util.concurrent.ConcurrentHashMap<String, Pair<Boolean, Long>>()
+
+    private fun held(id: String, on: Boolean, confirmed: MutableSet<String>): Boolean {
+        val p = pending[id] ?: return on
+        if (System.currentTimeMillis() > p.second) { pending.remove(id); return on }
+        if (on == p.first) confirmed.add(id)
+        return p.first
+    }
+
     fun update(s: HomeParser.Snapshot) {
         online = true
         lastError = null
-        lights = s.lights
+        val confirmed = HashSet<String>()
+        lights = s.lights.map { l -> held(l.entityId, l.on, confirmed).let { if (it == l.on) l else l.copy(on = it) } }
+        relays = s.relays.map { r -> held(r.entityId, r.on, confirmed).let { if (it == r.on) r else FloorPlan.Relay(r.entityId, r.name, it, r.available) } }
+        confirmed.forEach { pending.remove(it) }
         weather = s.weather
         alerts = s.alerts
         serverInfo = s.serverInfo
         calendars = s.calendars
-        relays = s.relays
         hasAnnounceEntity = s.hasAnnouncementEntity
         notifyListeners()
     }
@@ -73,6 +88,7 @@ object HomeModel {
 
     /** Liga/desliga na tela antes da confirmação do HA (a próxima leitura corrige se falhar). */
     fun setLightOptimistic(entityId: String, on: Boolean) {
+        pending[entityId] = on to System.currentTimeMillis() + 6000
         lights = lights.map { if (it.entityId == entityId) it.copy(on = on) else it }
         relays = relays.map { if (it.entityId == entityId) FloorPlan.Relay(it.entityId, it.name, on, it.available) else it }
         notifyListeners()

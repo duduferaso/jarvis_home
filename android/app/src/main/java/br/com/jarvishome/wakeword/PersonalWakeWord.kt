@@ -55,6 +55,7 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
 
     /** Distância da última fala avaliada (para o diagnóstico). */
     @Volatile var lastDistance = Float.NaN; private set
+    private var lastNote = 0L
     val threshold: Float get() = set.threshold
     val size: Int get() = set.templates.size
 
@@ -89,6 +90,15 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
             val feats = VoiceFeatures.compute(crop)
             val score = set.score(feats.frames)
             lastDistance = score.distance
+            // registro para entender quando a chamada não pega (ex.: TV falando junto)
+            val secs = samples.size / 16000f
+            val now = System.currentTimeMillis()
+            if (score.distance > set.threshold && now - lastNote > 8000 &&
+                (score.distance <= set.threshold + 0.06f || secs > 3f)) {
+                lastNote = now
+                JLog.i(String.format(java.util.Locale.US, "Chamada não reconhecida: distância %.3f (limiar %.3f), fala de %.1f s%s",
+                    score.distance, set.threshold, secs, if (secs > 3f) " — fala longa: barulho/TV junto?" else ""))
+            }
             if (score.distance <= set.threshold) {
                 val endFrame = if (score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
                 val wakeEndInSeg = max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)

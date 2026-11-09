@@ -583,7 +583,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
                 JLog.w("Falha ao mudar ${z.name}", e)
                 runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${z.name}", Toast.LENGTH_SHORT).show() }
             }
-            handler.postDelayed({ HomeMonitor.refreshSoon() }, 600)
+            HomeMonitor.refreshSoon(); handler.postDelayed({ HomeMonitor.refreshSoon() }, 2500)
         }.start()
     }
 
@@ -641,7 +641,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
                     JLog.w("Falha ao alternar ${l.entityId}", e)
                     runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${l.name}", Toast.LENGTH_SHORT).show() }
                 }
-                handler.postDelayed({ HomeMonitor.refreshSoon() }, 600)
+                HomeMonitor.refreshSoon(); handler.postDelayed({ HomeMonitor.refreshSoon() }, 2500)
             }.start()
         }
     }
