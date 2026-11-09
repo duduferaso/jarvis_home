@@ -72,6 +72,7 @@ class JarvisForegroundService : Service() {
     private lateinit var player: AudioPlayer
     private val main = Handler(Looper.getMainLooper())
     private val beeper = AlarmBeeper()
+    private var coach: WorkoutCoach? = null
 
     /** Timers e alarmes: confere a cada segundo; toca até alguém parar (voz, toque na tela) ou por 3 min. */
     private val timerLoop = object : Runnable {
@@ -128,6 +129,16 @@ class JarvisForegroundService : Service() {
         Timers.restore(prefs.timers)
         Timers.onChange = { prefs.timers = Timers.encode() }
         main.post(timerLoop)
+        coach = WorkoutCoach(this)
+        br.com.jarvishome.commands.Workout.onChange = { main.post { coach?.kick() } }
+        br.com.jarvishome.commands.Workout.onOpenScreen = {
+            main.post {
+                try {
+                    startActivity(Intent(this, br.com.jarvishome.ui.WorkoutActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                } catch (e: Exception) { JLog.w("Não abri a tela do treino", e) }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -175,6 +186,9 @@ class JarvisForegroundService : Service() {
         stopAudio()
         beeper.stop()
         Timers.onChange = null
+        br.com.jarvishome.commands.Workout.onChange = null
+        br.com.jarvishome.commands.Workout.onOpenScreen = null
+        coach?.release()
         player.release()
         sessionExecutor.shutdownNow()
         healthExecutor.shutdownNow()

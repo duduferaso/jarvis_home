@@ -5,7 +5,7 @@ import java.time.LocalDateTime
 var fl = 0
 fun ok(c: Boolean, m: String) { if (!c) fl++; println((if (c) "PASSOU " else "FALHOU ") + m) }
 val NOW: LocalDateTime = LocalDateTime.of(2026, 11, 8, 22, 10)
-fun p(s: String, ringing: Boolean = false, has: Boolean = false) = Timers.parse(s, NOW, ringing, has, false)
+fun p(s: String, ringing: Boolean = false, has: Boolean = false) = Timers.parse(s, NOW, ringing, false, has, false)
 fun t(s: String, sec: Long, label: String = "") { val c = p(s); ok(c == Cmd.SetTimer(sec, label), "\"$s\" -> $c") }
 
 fun main() {
@@ -43,6 +43,8 @@ fun main() {
     ok(p("para", ringing = true) == Cmd.Stop, "para (tocando)")
     ok(p("chega", ringing = true) == Cmd.Stop, "chega (tocando)")
     ok(p("desliga o alarme", ringing = true) == Cmd.Stop, "desliga o alarme (tocando)")
+    ok(Timers.parse("para", NOW, false, true, false, false) == Cmd.Stop, "\"Hey Tony\" parou o toque; \"para\" logo depois só confirma")
+    ok(Timers.parse("cancela o timer do arroz", NOW, false, true, true, false) == Cmd.Cancel("arroz", false), "logo depois de parar, ainda dá para cancelar outro timer")
     ok(p("timer") == Cmd.AskDuration, "\"timer\" sozinho pergunta de quanto tempo")
     println("-- não é timer")
     for (s in listOf("liga a luz do quarto", "me lembra amanhã às 9 de ligar pro médico", "marca dentista amanhã às 15h",

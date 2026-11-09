@@ -157,3 +157,8 @@ Requisitos estão no topo do `build.sh`. Use sempre o mesmo `android/jarvis-rele
 ## Timers e alarmes (1.8)
 
 No próprio app, sem internet: "Hey Tony, timer de 5 minutos" (também "alarme de 5 minutos", "me avisa em 20 minutos"), "timer de 10 minutos para o arroz", "me acorda às 6 e meia" / "alarme para as 7 horas" (sem dizer manhã/tarde, vale o próximo horário), "quanto falta?", "cancela o timer do arroz", "cancela todos os timers". A contagem aparece na tela. Quando acaba, o Jarvis fala e toca "bip-bip-bip" no volume de alarme; para com "Hey Tony" (ou "Hey Tony, para"), com um toque na tela, ou sozinho depois de 3 minutos. A lista sobrevive a um reinício do app. Lógica em `commands/Timers.kt`, testes em `tests/jvm_timers`.
+
+
+## Treino intervalado (1.9)
+
+Botão **TREINO** na tela inicial: tempo total (5 a 60 min), execução e descanso (padrão 30 s + 30 s) e lista de exercícios (um por linha; repete quando acaba). A tela mostra a fase (EXECUÇÃO verde / DESCANSO azul), a contagem, o exercício atual ("3 de 8", "volta 2"), o próximo, a rodada e o tempo que falta. O serviço avisa com bipes nos 3 últimos segundos, fala o exercício na execução e "Descanso. Próximo: …" no descanso (voz do Android, sem rede). A última rodada termina na execução. Voz: "começa o treino [de 20 minutos]", "pausa", "continua", "próximo", "em que exercício eu estou?", "quanto falta?", "para o treino". Lógica em `commands/Workout.kt`, testes em `tests/jvm_treino`.

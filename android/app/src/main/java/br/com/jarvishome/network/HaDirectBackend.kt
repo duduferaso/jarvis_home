@@ -36,7 +36,9 @@ class HaDirectBackend(
     internal val calendarWrite: String = "",
     /** Liga/desliga luzes no próprio app (frase ou exemplos treinados), antes do Home Assistant. */
     internal val localLights: Boolean = true,
-    internal val trained: List<LightCommands.Trained> = emptyList()
+    internal val trained: List<LightCommands.Trained> = emptyList(),
+    /** Plano de treino salvo (para "Hey Tony, começa o treino"). */
+    internal val workoutPlan: br.com.jarvishome.commands.Workout.Plan = br.com.jarvishome.commands.Workout.Plan(30, 30, 30, emptyList())
 ) : Backend {
 
     internal val base = baseUrl.trimEnd('/')
@@ -318,6 +320,21 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                         .put("response_type", if (reply.done) "action_done" else "query_answer")
                         .put("continue_conversation", reply.continueConversation))
                     val url = try { HaDirectBackend.speakOn(socket, 5, backend.pipelineId, reply.speech) } catch (e: Exception) { null }
+                    if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
+                    return
+                }
+            }
+
+            // Treino intervalado: começar, pausar, "em que exercício estou?"
+            if (text.isNotBlank()) {
+                val reply = try { br.com.jarvishome.commands.Workout.handle(text, backend.workoutPlan) } catch (e: Exception) { JLog.w("Treino", e); null }
+                if (reply != null) {
+                    JLog.i("Treino: “$text” → “${reply.speech}”")
+                    if (reply.openScreen) br.com.jarvishome.commands.Workout.onOpenScreen?.invoke()
+                    onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "treino"))
+                    onEvent(JSONObject().put("type", "response").put("text", reply.speech)
+                        .put("response_type", "action_done").put("continue_conversation", false))
+                    val url = try { HaDirectBackend.speakOn(socket, 6, backend.pipelineId, reply.speech) } catch (e: Exception) { null }
                     if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
                     return
                 }

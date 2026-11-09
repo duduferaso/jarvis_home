@@ -67,6 +67,13 @@
             android:theme="@style/JarvisTheme.Fullscreen" />
 
         <activity
+            android:name=".ui.WorkoutActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
+            android:theme="@style/JarvisTheme.Fullscreen" />
+
+        <activity
             android:name=".ui.AgendaActivity"
             android:exported="false"
             android:label="Agenda"

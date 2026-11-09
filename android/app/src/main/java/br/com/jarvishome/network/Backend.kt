@@ -40,7 +40,8 @@ object Backends {
             calendarEnabled = prefs.calendarEnabled,
             calendarWrite = prefs.calendarWrite,
             localLights = prefs.localLights,
-            trained = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands)
+            trained = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands),
+            workoutPlan = prefs.workoutPlan()
         )
         else JarvisApi(prefs)
 }

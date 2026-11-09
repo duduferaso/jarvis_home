@@ -109,6 +109,24 @@ class Prefs(context: Context) {
         get() = sp.getString("timers", "[]") ?: "[]"
         set(v) = sp.edit().putString("timers", v).apply()
 
+    // Treino intervalado
+    var workoutMin: Int
+        get() = sp.getInt("workout_min", 30)
+        set(v) = sp.edit().putInt("workout_min", v).apply()
+    var workoutWork: Int
+        get() = sp.getInt("workout_work", 30)
+        set(v) = sp.edit().putInt("workout_work", v).apply()
+    var workoutRest: Int
+        get() = sp.getInt("workout_rest", 30)
+        set(v) = sp.edit().putInt("workout_rest", v).apply()
+    /** Um exercício por linha. */
+    var workoutExercises: String
+        get() = sp.getString("workout_exercises", "") ?: ""
+        set(v) = sp.edit().putString("workout_exercises", v).apply()
+
+    fun workoutPlan() = br.com.jarvishome.commands.Workout.Plan(workoutMin, workoutWork, workoutRest,
+        workoutExercises.lines().map { it.trim() }.filter { it.isNotEmpty() })
+
     var silenceMs: Int
         get() = sp.getInt("silence_ms", 900)
         set(v) = sp.edit().putInt("silence_ms", v.coerceIn(400, 2500)).apply()

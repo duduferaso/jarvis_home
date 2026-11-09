@@ -216,6 +216,16 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         }
         root.addView(gear, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END))
+        val workout = TextView(this).apply {
+            text = "TREINO"
+            textSize = 12f
+            letterSpacing = 0.2f
+            setTextColor(Color.argb(110, 34, 229, 255))
+            setPadding(dp(18), dp(18), dp(18), dp(16))
+            contentDescription = "Treino"
+            setOnClickListener { startActivity(Intent(this@MainActivity, WorkoutActivity::class.java)) }
+        }
+        root.addView(workout, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.START))
         return root
     }
 

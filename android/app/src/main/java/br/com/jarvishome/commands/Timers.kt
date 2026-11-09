@@ -213,7 +213,8 @@ object Timers {
     private fun mark(t: Toks, pred: (String) -> Boolean) { for (k in t.norm.indices) if (pred(t.norm[k])) t.used[k] = true }
 
     /** null = não é sobre timer/alarme (segue adiante). */
-    fun parse(text: String, now: LocalDateTime, ringing: Boolean = isRinging() || System.currentTimeMillis() - stoppedAt < 20_000, hasTimers: Boolean = all().isNotEmpty(),
+    fun parse(text: String, now: LocalDateTime, ringing: Boolean = isRinging(),
+              justStopped: Boolean = System.currentTimeMillis() - stoppedAt < 20_000, hasTimers: Boolean = all().isNotEmpty(),
               pendingAsk: Boolean = System.currentTimeMillis() - askedAt < 60_000): Cmd? {
         val t = Toks(text)
         val n = t.norm.filter { it.isNotEmpty() }
@@ -225,6 +226,8 @@ object Timers {
 
         // tocando: "para", "chega", "ok"… desligam
         if (ringing && (n.size <= 4 && n.any { it in STOP } || (hasWord && n.indexOfFirst { it in CANCEL } in 0..1))) return Cmd.Stop
+        // o "Hey Tony" já parou o toque: "para", "chega", "ok" logo depois só confirmam
+        if (justStopped && !hasWord && n.size <= 3 && n.any { it in STOP }) return Cmd.Stop
 
         // cancelar: o verbo vem antes da palavra timer ("cancela o timer", "para o alarme")
         val firstWord = n.indexOfFirst { TIMER_WORDS.matches(it) }

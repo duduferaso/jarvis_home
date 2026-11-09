@@ -94,6 +94,18 @@ fun main() {
     ok(q.startsWith("Faltam 4 minutos") || q.startsWith("Faltam 5 minutos"), "quanto falta: $q")
     br.com.jarvishome.commands.Timers.clear()
 
+    println("1f) Treino por voz")
+    stt(base, "Ei Tony, começa o treino de 20 minutos.")
+    val e1f = session(bt, 3)
+    ok(br.com.jarvishome.commands.Workout.active && br.com.jarvishome.commands.Workout.plan!!.totalMin == 20, "treino de 20 minutos começou")
+    ok(e1f.any { it.optString("type") == "response" && it.optString("text").startsWith("Treino de 20 minutos") }, "resposta do treino")
+    stt(base, "Tony, pausa.")
+    session(bt, 3)
+    ok(br.com.jarvishome.commands.Workout.paused, "\"pausa\" pausou o treino")
+    stt(base, "Tony, para o treino.")
+    session(bt, 3)
+    ok(!br.com.jarvishome.commands.Workout.active, "\"para o treino\" encerrou")
+
     println("1b) Whisper ouve \"Jarvis, consultar gastos da.\" e a casa não entende")
     stt(base, "Jarvis, consultar gastos da.")
     val e1b = session(b, 10)
