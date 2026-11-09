@@ -75,6 +75,7 @@ class SettingsActivity : Activity() {
     private var personalThreshold = 0.22f
     private lateinit var swCorrect: Switch
     private lateinit var swLocalLights: Switch
+    private lateinit var swFloorPlan: Switch
     private lateinit var vocabField: EditText
     private lateinit var swWake: Switch
     private lateinit var swBeep: Switch
@@ -179,6 +180,7 @@ class SettingsActivity : Activity() {
             "Agenda" to "Agenda",
             "Avisos do Home Assistant" to "Agenda",
             "Informações na tela" to "Tela",
+            "Planta da casa" to "Tela",
             "Modo noite" to "Tela",
             "Tela e terminal" to "Tela",
             "Diagnóstico" to "Sistema",
@@ -539,6 +541,12 @@ class SettingsActivity : Activity() {
         sensorsField = field("Sensores do servidor (opcional)", prefs.serverSensors,
             "vazio = detectar sozinho (ex.: sensor.processor_temperature)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS)
 
+        section("Planta da casa")
+        swFloorPlan = switch("Mostrar a planta 3D na tela inicial (em espera)", prefs.showFloorPlan)
+        note("Cada cômodo acende quando a luz dele está ligada; toque para ligar/desligar. " +
+            "Toque e segure num cômodo para escolher quais luzes/relés do Home Assistant ele controla " +
+            "(sem escolha, o app procura pelo nome: sala, jantar, cozinha, quarto…).")
+
         section("Modo noite")
         swNight = switch("Tela no mínimo à noite (o primeiro toque só acende)", prefs.nightMode)
         nightStart = prefs.nightStart
@@ -663,6 +671,7 @@ class SettingsActivity : Activity() {
         }
         prefs.correctText = swCorrect.isChecked
         prefs.localLights = swLocalLights.isChecked
+        prefs.showFloorPlan = swFloorPlan.isChecked
         prefs.extraVocabulary = vocabField.text.toString()
         prefs.calendarEnabled = swCalendar.isChecked
         prefs.agendaReminders = swReminders.isChecked

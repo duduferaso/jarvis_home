@@ -9,7 +9,7 @@ A=../android/app/src/main/java/br/com/jarvishome
 T=$(mktemp -d)
 sed '/^object Backends/,$d; /import br.com.jarvishome.settings.Prefs/d; /import br.com.jarvishome.wakeword/d' $A/network/Backend.kt > $T/Backend.kt
 cp $A/network/HaDirectBackend.kt $A/network/MiniWebSocket.kt $A/network/TextCorrector.kt $A/network/CommandMatcher.kt $A/commands/LightCommands.kt $A/commands/Timers.kt $A/commands/Workout.kt $A/calendar/CalendarParser.kt $A/calendar/CalendarAssistant.kt $A/calendar/CalendarModel.kt $A/domain/AssistantState.kt \
-   $A/calendar/*.kt $A/home/HomeApi.kt $A/home/HomeParser.kt jvm/*.kt $T/
+   $A/calendar/*.kt $A/home/HomeApi.kt $A/home/HomeParser.kt $A/home/FloorPlan.kt jvm/*.kt $T/
 "$KOTLINC" $T/*.kt -d $T/test.jar 2>&1 | grep error || true
 python3 mock_ha.py & M=$!
 trap 'kill $M 2>/dev/null; rm -rf $T' EXIT

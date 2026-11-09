@@ -29,6 +29,7 @@ import br.com.jarvishome.domain.AssistantState
 import br.com.jarvishome.domain.ConnectionState
 import br.com.jarvishome.domain.JLog
 import br.com.jarvishome.domain.StateBus
+import br.com.jarvishome.home.FloorPlan
 import br.com.jarvishome.home.HomeApi
 import br.com.jarvishome.home.HomeModel
 import br.com.jarvishome.home.HomeMonitor
@@ -49,6 +50,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
 
     private lateinit var prefs: Prefs
     private lateinit var face: CharacterView
+    private lateinit var plan: FloorPlanView
     private lateinit var titleView: TextView
     private lateinit var stateLabel: TextView
     private lateinit var hint: TextView
@@ -111,6 +113,14 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             true
         }
         root.addView(face, FrameLayout.LayoutParams(-1, -1))
+
+        // planta da casa em 3D: aparece no lugar do rosto quando o Jarvis está em espera
+        plan = FloorPlanView(this).apply {
+            visibility = View.GONE
+            onZoneTap = { z -> toggleZone(z) }
+            onZoneLongPress = { z -> chooseZoneLights(z) }
+        }
+        root.addView(plan, FrameLayout.LayoutParams(-1, -1).apply { topMargin = dp(118); bottomMargin = dp(240) })
 
         // ---------------- topo: nome, conexão, relógio, data, clima, aviso
         val top = LinearLayout(this).apply {
@@ -533,7 +543,17 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         }
 
         // luzes
-        val lights = if (online && prefs.showLights) HomeModel.lights else emptyList()
+        // planta (em espera, com a casa conectada)
+        val planOn = prefs.showFloorPlan && online && quiet
+        if (planOn) {
+            val map = FloorPlan.mapping(FloorPlan.decode(prefs.floorMap), HomeModel.relays)
+            plan.states = FloorPlan.zones.associate { it.id to FloorPlan.isOn(it, map, HomeModel.relays) }
+        }
+        plan.dim = nightDim
+        plan.visibility = if (planOn) View.VISIBLE else View.GONE
+        face.visibility = if (planOn) View.INVISIBLE else View.VISIBLE
+
+        val lights = if (online && prefs.showLights && !planOn) HomeModel.lights else emptyList()
         lightsScroll.visibility = if (lights.isNotEmpty()) View.VISIBLE else View.GONE
         if (lights.isNotEmpty()) {
             lightsRow.removeAllViews()
@@ -541,6 +561,59 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         }
 
         face.compact = showInfo && (agendaOn || lights.isNotEmpty())
+    }
+
+    /** Toque num cômodo: se alguma luz dele está acesa, apaga todas; senão acende. */
+    private fun toggleZone(z: FloorPlan.Zone) {
+        val map = FloorPlan.mapping(FloorPlan.decode(prefs.floorMap), HomeModel.relays)
+        val ids = map[z.id].orEmpty()
+        if (ids.isEmpty()) {
+            Toast.makeText(this, "${z.name}: nenhuma luz escolhida. Toque e segure para escolher.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val on = FloorPlan.isOn(z, map, HomeModel.relays) == true
+        for (id in ids) HomeModel.setLightOptimistic(id, !on)
+        val p = prefs
+        Thread {
+            try {
+                val arr = org.json.JSONArray(); ids.forEach { arr.put(it) }
+                HomeApi(p.serverUrl, p.token).callService("homeassistant", if (on) "turn_off" else "turn_on",
+                    org.json.JSONObject().put("entity_id", arr))
+            } catch (e: Throwable) {
+                JLog.w("Falha ao mudar ${z.name}", e)
+                runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${z.name}", Toast.LENGTH_SHORT).show() }
+            }
+            handler.postDelayed({ HomeMonitor.refreshSoon() }, 600)
+        }.start()
+    }
+
+    /** Toque longo num cômodo: escolher quais luzes/relés do Home Assistant ele controla. */
+    private fun chooseZoneLights(z: FloorPlan.Zone) {
+        val relays = HomeModel.relays.sortedBy { it.name.lowercase() }
+        if (relays.isEmpty()) {
+            Toast.makeText(this, "Ainda não li as luzes do Home Assistant.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val saved = FloorPlan.decode(prefs.floorMap).toMutableMap()
+        val current = FloorPlan.mapping(saved, HomeModel.relays)[z.id].orEmpty()
+        val checked = BooleanArray(relays.size) { relays[it].entityId in current }
+        val labels = relays.map { it.name + "  ·  " + it.entityId }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Luzes de: ${z.name}")
+            .setMultiChoiceItems(labels, checked) { _, i, v -> checked[i] = v }
+            .setPositiveButton("Salvar") { _, _ ->
+                saved[z.id] = relays.filterIndexed { i, _ -> checked[i] }.map { it.entityId }
+                prefs.floorMap = FloorPlan.encode(saved)
+                JLog.i("Planta: ${z.name} → ${saved[z.id]}")
+                refreshHome()
+            }
+            .setNeutralButton("Automático") { _, _ ->
+                saved.remove(z.id)
+                prefs.floorMap = FloorPlan.encode(saved)
+                refreshHome()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun chip(l: HomeParser.Light): TextView = TextView(this).apply {

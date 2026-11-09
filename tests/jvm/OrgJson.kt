@@ -10,6 +10,7 @@ class JSONObject() {
     fun optInt(k: String, d: Int = 0): Int = (map[k] as? Number)?.toInt() ?: d
     fun optLong(k: String, d: Long = 0L): Long = (map[k] as? Number)?.toLong() ?: d
     fun optDouble(k: String, d: Double = Double.NaN): Double = (map[k] as? Number)?.toDouble() ?: d
+    fun keys(): Iterator<String> = map.keys.toList().iterator()
     fun has(k: String) = map.containsKey(k)
     fun isNull(k: String) = map.containsKey(k) && map[k] == null
     fun optJSONObject(k: String): JSONObject? = map[k] as? JSONObject

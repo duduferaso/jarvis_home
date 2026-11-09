@@ -24,7 +24,9 @@ object HomeParser {
         val announcement: String?,
         val announcementEntity: String?,
         val hasAnnouncementEntity: Boolean,
-        val calendars: List<CalendarInfo>
+        val calendars: List<CalendarInfo>,
+        /** Todas as luzes e relés (light.* e switch.*), para a planta da casa. */
+        val relays: List<FloorPlan.Relay> = emptyList()
     )
 
     const val ANNOUNCE_ENTITY = "input_text.jarvis_aviso"
@@ -73,6 +75,7 @@ object HomeParser {
         var announcementEntity: String? = null
         var hasAnnounce = false
         val calendars = ArrayList<CalendarInfo>()
+        val relays = ArrayList<FloorPlan.Relay>()
 
         for (i in 0 until states.length()) {
             val st = states.optJSONObject(i) ?: continue
@@ -84,6 +87,7 @@ object HomeParser {
             val n = norm(name)
             val available = state != "unavailable" && state != "unknown"
 
+            if (domain == "light" || domain == "switch") relays.add(FloorPlan.Relay(id, name, state == "on", available))
             when (domain) {
                 "light" -> lights.add(Light(id, shortLightName(name), state == "on", available))
                 "switch" -> if (n.startsWith("luz") || n.contains("lampada") || n.contains(" luz ")) {
@@ -128,6 +132,6 @@ object HomeParser {
         }
         lights.sortBy { norm(it.name) }
         return Snapshot(lights.take(MAX_LIGHTS), weather, alerts.distinct().take(2), info, announcement,
-            announcementEntity, hasAnnounce, calendars)
+            announcementEntity, hasAnnounce, calendars, relays)
     }
 }

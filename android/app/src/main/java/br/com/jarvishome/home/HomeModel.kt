@@ -21,6 +21,7 @@ object HomeModel {
     @Volatile var alerts: List<String> = emptyList(); private set
     @Volatile var serverInfo: List<String> = emptyList(); private set
     @Volatile var calendars: List<CalendarInfo> = emptyList(); private set
+    @Volatile var relays: List<FloorPlan.Relay> = emptyList(); private set
     @Volatile var hasAnnounceEntity = false; private set
     @Volatile var agenda: List<CalEvent> = emptyList(); private set
     @Volatile var agendaLoaded = false; private set
@@ -39,6 +40,7 @@ object HomeModel {
         alerts = s.alerts
         serverInfo = s.serverInfo
         calendars = s.calendars
+        relays = s.relays
         hasAnnounceEntity = s.hasAnnouncementEntity
         notifyListeners()
     }
@@ -72,6 +74,7 @@ object HomeModel {
     /** Liga/desliga na tela antes da confirmação do HA (a próxima leitura corrige se falhar). */
     fun setLightOptimistic(entityId: String, on: Boolean) {
         lights = lights.map { if (it.entityId == entityId) it.copy(on = on) else it }
+        relays = relays.map { if (it.entityId == entityId) FloorPlan.Relay(it.entityId, it.name, on, it.available) else it }
         notifyListeners()
     }
 

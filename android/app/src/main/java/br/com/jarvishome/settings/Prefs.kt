@@ -133,6 +133,15 @@ class Prefs(context: Context) {
     fun workoutPlan() = br.com.jarvishome.commands.Workout.Plan(workoutMin, workoutWork, workoutRest,
         workoutExercises.lines().map { it.trim() }.filter { it.isNotEmpty() }, workoutCount, workoutSeries)
 
+    /** Planta da casa na tela inicial (em espera). */
+    var showFloorPlan: Boolean
+        get() = sp.getBoolean("show_floor_plan", true)
+        set(v) = sp.edit().putBoolean("show_floor_plan", v).apply()
+    /** Luzes escolhidas para cada cômodo da planta (JSON {cômodo: [entity_id]}). */
+    var floorMap: String
+        get() = sp.getString("floor_map", "{}") ?: "{}"
+        set(v) = sp.edit().putString("floor_map", v).apply()
+
     var silenceMs: Int
         get() = sp.getInt("silence_ms", 900)
         set(v) = sp.edit().putInt("silence_ms", v.coerceIn(400, 2500)).apply()
