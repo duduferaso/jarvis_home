@@ -48,6 +48,8 @@ class WorkoutActivity : Activity() {
     private var totalMin = 30
     private var workSec = 30
     private var restSec = 30
+    private var count = 5
+    private var series = 5
     private lateinit var exercisesField: EditText
 
     private val cyan = Color.rgb(34, 229, 255)
@@ -59,7 +61,7 @@ class WorkoutActivity : Activity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        totalMin = prefs.workoutMin; workSec = prefs.workoutWork; restSec = prefs.workoutRest
+        totalMin = prefs.workoutMin; workSec = prefs.workoutWork; restSec = prefs.workoutRest; count = prefs.workoutCount; series = prefs.workoutSeries
         root = FrameLayout(this).apply { setBackgroundColor(Color.rgb(6, 8, 10)) }
         setup = buildSetup()
         run = buildRun()
@@ -108,13 +110,14 @@ class WorkoutActivity : Activity() {
     private fun updateSummary() {
         if (!::summary.isInitialized) return
         val p = currentPlan()
-        val list = p.exercises
-        summary.text = "${p.rounds} rodadas de ${p.workSec}s + ${p.restSec}s" +
-            (if (list.isNotEmpty()) " · ${list.size} exercícios" + (if (p.rounds > list.size) ", cada um ${"%.1f".format(p.rounds.toDouble() / list.size)}×" else "") else "")
+        summary.text = "${p.perSeries} exercícios × ${p.seriesCount} " + (if (p.seriesCount == 1) "série" else "séries") +
+            " = ${p.rounds} rodadas de ${p.workSec}s + ${p.restSec}s\nTermina em ${Workout.mmss(p.totalSec * 1000L)}" +
+            (if (p.exercises.isNotEmpty() && p.exercises.size != count) "  (usando os ${p.exercises.size} nomes da lista)" else "")
     }
 
     private fun currentPlan() = Workout.Plan(totalMin, workSec, restSec,
-        if (::exercisesField.isInitialized) exercisesField.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() } else emptyList())
+        if (::exercisesField.isInitialized) exercisesField.text.toString().lines().map { it.trim() }.filter { it.isNotEmpty() } else emptyList(),
+        count, series)
 
     private fun buildSetup(): ScrollView {
         val sv = ScrollView(this)
@@ -123,11 +126,12 @@ class WorkoutActivity : Activity() {
         box.addView(TextView(this).apply {
             text = "TREINO"; setTextColor(cyan); textSize = 16f; letterSpacing = 0.25f; typeface = Typeface.DEFAULT_BOLD
         })
-        slider(box, "Tempo total", 5, 60, 5, totalMin, { "$it min" }) { totalMin = it }
+        slider(box, "Quantidade de exercícios", 1, 15, 1, count, { "$it" }) { count = it }
+        slider(box, "Séries", 1, 15, 1, series, { "$it" }) { series = it }
         slider(box, "Execução", 10, 90, 5, workSec, { "$it s" }) { workSec = it }
         slider(box, "Descanso", 0, 90, 5, restSec, { "$it s" }) { restSec = it }
         box.addView(TextView(this).apply {
-            text = "Exercícios (um por linha, na ordem)"; setTextColor(Color.WHITE); textSize = 16f; setPadding(0, dp(20), 0, dp(4))
+            text = "Nomes dos exercícios (opcional, um por linha)"; setTextColor(Color.WHITE); textSize = 16f; setPadding(0, dp(20), 0, dp(4))
         })
         exercisesField = EditText(this).apply {
             setText(prefs.workoutExercises)
@@ -144,7 +148,7 @@ class WorkoutActivity : Activity() {
         box.addView(exercisesField)
         box.addView(TextView(this).apply {
             setTextColor(faint); textSize = 12f
-            text = "Quando a lista acaba, volta para o primeiro. Vazio = só rodadas."
+            text = "Vazio = só o número (“exercício 3 de 5”). Com nomes, a quantidade vem da lista."
         })
         summary = TextView(this).apply { setTextColor(cyan); textSize = 15f; setPadding(0, dp(18), 0, dp(6)) }
         box.addView(summary)
@@ -159,7 +163,8 @@ class WorkoutActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, dp(64)).apply { topMargin = dp(8) })
         box.addView(TextView(this).apply {
             setTextColor(faint); textSize = 13f; setPadding(0, dp(20), 0, 0)
-            text = "Por voz: “Hey Tony, começa o treino” (usa o que está salvo aqui) ou “começa o treino de 20 minutos”.\n" +
+            text = "Por voz: “Hey Tony, treino de 5 exercícios e 5 séries” (25 min com 30 s + 30 s), " +
+                "“treino de 30 minutos com 6 exercícios” ou “começa o treino” (usa o que está salvo aqui).\n" +
                 "Durante o treino: “Hey Tony, pausa”, “continua”, “próximo”, “em que exercício eu estou?”, “quanto falta?”, “para o treino”."
         })
         return sv
@@ -169,6 +174,8 @@ class WorkoutActivity : Activity() {
         prefs.workoutMin = totalMin
         prefs.workoutWork = workSec
         prefs.workoutRest = restSec
+        prefs.workoutCount = count
+        prefs.workoutSeries = series
         prefs.workoutExercises = exercisesField.text.toString().trim()
     }
 
@@ -241,28 +248,39 @@ class WorkoutActivity : Activity() {
         countView.setTextColor(if (s.paused) faint else Color.WHITE)
         when (s.phase) {
             Phase.PREP -> {
-                exerciseView.text = s.exercise.ifEmpty { "Rodada 1" }
-                exerciseInfo.text = "primeiro exercício"
+                exerciseView.text = s.exercise.ifEmpty { if (s.exerciseCount > 0) "Exercício 1 de ${s.exerciseCount}" else "Rodada 1" }
+                exerciseInfo.text = if (s.laps > 0) "Série 1 de ${s.laps}" else ""
                 nextView.text = ""
             }
             Phase.WORK -> {
-                exerciseView.text = s.exercise.ifEmpty { "Rodada ${s.round}" }
-                exerciseInfo.text = if (s.exerciseCount > 0) "exercício ${s.exerciseIndex} de ${s.exerciseCount}" +
-                    (if (s.lap > 1) " · volta ${s.lap}" else "") else ""
-                nextView.text = if (s.next.isNotEmpty()) "Próximo: ${s.next}" else if (s.round == s.rounds) "Última rodada!" else ""
+                exerciseView.text = when {
+                    s.exercise.isNotEmpty() -> s.exercise
+                    s.exerciseCount > 0 -> "Exercício ${s.exerciseIndex} de ${s.exerciseCount}"
+                    else -> "Rodada ${s.round}"
+                }
+                exerciseInfo.text = (if (s.exercise.isNotEmpty()) "exercício ${s.exerciseIndex} de ${s.exerciseCount} · " else "") +
+                    (if (s.laps > 0) "Série ${s.lap} de ${s.laps}" else "")
+                nextView.text = if (s.round == s.rounds) "Último exercício!" else ""
             }
             Phase.REST -> {
-                exerciseView.text = if (s.next.isNotEmpty()) s.next else if (s.round < s.rounds) "Rodada ${s.round + 1}" else ""
-                exerciseInfo.text = if (s.next.isNotEmpty()) "próximo exercício" else ""
-                nextView.text = if (s.exercise.isNotEmpty()) "Acabou: ${s.exercise}" else ""
+                val nextIdx = if (s.exerciseCount > 0) s.exerciseIndex % s.exerciseCount + 1 else 0
+                val nextLap = if (s.exerciseCount > 0 && s.exerciseIndex == s.exerciseCount) s.lap + 1 else s.lap
+                exerciseView.text = when {
+                    s.round >= s.rounds -> ""
+                    s.next.isNotEmpty() -> s.next
+                    s.exerciseCount > 0 -> "Exercício $nextIdx de ${s.exerciseCount}"
+                    else -> "Rodada ${s.round + 1}"
+                }
+                exerciseInfo.text = if (s.round >= s.rounds) "" else "próximo" + (if (s.laps > 0) " · Série $nextLap de ${s.laps}" else "")
+                nextView.text = if (s.exerciseCount > 0 && s.exerciseIndex == s.exerciseCount) "Fim da série ${s.lap}" else ""
             }
             Phase.DONE -> {
                 exerciseView.text = "Mandou bem!"
-                exerciseInfo.text = "${s.rounds} rodadas"
+                exerciseInfo.text = if (s.laps > 0) "${s.exerciseCount} exercícios × ${s.laps} séries" else "${s.rounds} rodadas"
                 nextView.text = ""
             }
         }
-        roundView.text = if (s.phase == Phase.DONE) "" else "Rodada ${s.round} de ${s.rounds}  ·  faltam ${Workout.mmss(s.totalLeftMs)}"
+        roundView.text = if (s.phase == Phase.DONE) "" else "Faltam ${Workout.mmss(s.totalLeftMs)} de treino"
         val total = Workout.plan?.let { (Workout.PREP_SEC + it.totalSec) * 1000L } ?: 1L
         progress.progress = (1000 - s.totalLeftMs * 1000 / total).toInt().coerceIn(0, 1000)
         pauseBtn.text = if (s.paused) "Continuar" else "Pausar"

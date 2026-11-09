@@ -119,13 +119,19 @@ class Prefs(context: Context) {
     var workoutRest: Int
         get() = sp.getInt("workout_rest", 30)
         set(v) = sp.edit().putInt("workout_rest", v).apply()
-    /** Um exercício por linha. */
+    var workoutSeries: Int
+        get() = sp.getInt("workout_series", 5)
+        set(v) = sp.edit().putInt("workout_series", v).apply()
+    var workoutCount: Int
+        get() = sp.getInt("workout_count", 5)
+        set(v) = sp.edit().putInt("workout_count", v).apply()
+    /** Nomes dos exercícios (opcional), um por linha. */
     var workoutExercises: String
         get() = sp.getString("workout_exercises", "") ?: ""
         set(v) = sp.edit().putString("workout_exercises", v).apply()
 
     fun workoutPlan() = br.com.jarvishome.commands.Workout.Plan(workoutMin, workoutWork, workoutRest,
-        workoutExercises.lines().map { it.trim() }.filter { it.isNotEmpty() })
+        workoutExercises.lines().map { it.trim() }.filter { it.isNotEmpty() }, workoutCount, workoutSeries)
 
     var silenceMs: Int
         get() = sp.getInt("silence_ms", 900)

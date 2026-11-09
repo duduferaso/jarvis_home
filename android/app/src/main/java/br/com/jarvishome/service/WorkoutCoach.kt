@@ -72,16 +72,20 @@ class WorkoutCoach(context: Context) {
                 Phase.PREP -> {}
                 Phase.WORK -> {
                     beep(ToneGenerator.TONE_PROP_BEEP2, 500)
-                    main.postDelayed({ say(s.exercise.ifEmpty { "Vai!" }) }, 450)
+                    // começo de série: "Série 2 de 5" (o exercício aparece na tela)
+                    val newSeries = s.exerciseCount > 0 && s.exerciseIndex == 1
+                    val msg = when {
+                        newSeries && s.lap == s.laps && s.laps > 1 -> "Última série!"
+                        newSeries -> "Série ${s.lap} de ${s.laps}."
+                        s.exercise.isNotEmpty() -> s.exercise
+                        else -> ""
+                    }
+                    if (msg.isNotEmpty()) main.postDelayed({ say(msg) }, 450)
                 }
                 Phase.REST -> {
                     beep(ToneGenerator.TONE_PROP_ACK, 300)
-                    val half = s.round == s.rounds / 2 && s.rounds >= 6
-                    val msg = StringBuilder("Descanso.")
-                    if (half) msg.append(" Metade do treino.")
-                    else if (s.round % 5 == 0) msg.append(" Rodada ${s.round} de ${s.rounds}.")
-                    if (s.next.isNotEmpty()) msg.append(" Próximo: ${s.next}.")
-                    main.postDelayed({ say(msg.toString()) }, 350)
+                    val endSeries = s.exerciseCount > 0 && s.exerciseIndex == s.exerciseCount
+                    main.postDelayed({ say(if (endSeries) "Fim da série ${s.lap}. Descanso." else "Descanso.") }, 350)
                 }
                 Phase.DONE -> {
                     doneAt = System.currentTimeMillis()
