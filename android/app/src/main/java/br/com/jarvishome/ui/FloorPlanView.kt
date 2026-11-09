@@ -161,7 +161,8 @@ class FloorPlanView(context: Context) : View(context) {
             val lit = g > 0.5f
             // nome centralizado no cômodo
             val cx = px(z.label[0], z.label[1])
-            val cy = py(z.label[0], z.label[1]) + text.textSize * 0.35f
+            // um pouco acima do centro do piso: com as paredes, o cômodo "parece" mais alto
+            val cy = py(z.label[0], z.label[1], wallH * 0.6f) + text.textSize * 0.35f
             val w = text.measureText(z.name) / 2 + dp(6f)
             val top = cy - text.textSize * 0.95f
             val bottom = cy + text.textSize * 0.38f
