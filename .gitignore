@@ -1,0 +1,9 @@
+# nunca publicar
+*.jks
+*.keystore
+android/build/
+*.apk
+provision.json
+.env
+tests/__pycache__/
+__pycache__/

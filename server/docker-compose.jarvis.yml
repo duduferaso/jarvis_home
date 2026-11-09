@@ -1,0 +1,48 @@
+# Jarvis Home: serviços de voz locais (OPCIONAL).
+#
+# Só é necessário se o seu Home Assistant ainda NÃO tiver faster-whisper e piper.
+# (Confira em Configurações > Assistentes de voz. Se já aparecem, não use este arquivo.)
+#
+#   docker compose -f docker-compose.jarvis.yml up -d
+#
+# Isso sobe só Whisper e Piper. O orquestrador fica desligado: o app fala direto
+# com o Home Assistant. Para usar o orquestrador opcional:
+#   cp .env.example .env && nano .env && chmod 600 .env
+#   docker compose -f docker-compose.jarvis.yml --profile orquestrador up -d --build
+#
+# Depois do primeiro pull, fixe as versões das imagens (veja README.md, passo 1).
+
+services:
+  whisper:
+    image: rhasspy/wyoming-whisper:latest
+    container_name: jarvis-whisper
+    restart: unless-stopped
+    # small-int8: equilíbrio para CPU sem GPU. Lento? troque por base-int8.
+    # Sobrando CPU e quer mais precisão? medium-int8.
+    command: --model ${WHISPER_MODEL:-small-int8} --language pt --beam-size 1
+    volumes:
+      - ./data/whisper:/data
+    ports:
+      - "10300:10300"
+
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    container_name: jarvis-piper
+    restart: unless-stopped
+    command: --voice ${PIPER_VOICE:-pt_BR-faber-medium}
+    volumes:
+      - ./data/piper:/data
+    ports:
+      - "10200:10200"
+
+  orchestrator:
+    build: ./jarvis-orchestrator
+    container_name: jarvis-orchestrator
+    profiles: ["orquestrador"]
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    ports:
+      - "8765:8765"
+    # O HA em Docker costuma usar network_mode: host -> em HA_URL use o IP do servidor.
