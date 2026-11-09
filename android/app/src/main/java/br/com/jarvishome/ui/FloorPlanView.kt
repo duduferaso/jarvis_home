@@ -50,6 +50,7 @@ class FloorPlanView(context: Context) : View(context) {
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
     }
     private val path = Path()
+    private val label = android.graphics.RectF()
 
     private fun dp(v: Float) = v * resources.displayMetrics.density
 
@@ -70,7 +71,7 @@ class FloorPlanView(context: Context) : View(context) {
         scale = min((w - 2 * pad) / (maxX - minX), (h - 2 * pad) / (maxY - minY))
         ox = (w - (maxX - minX) * scale) / 2 - minX * scale
         oy = (h - (maxY - minY) * scale) / 2 - minY * scale
-        text.textSize = max(dp(10f), scale * 0.42f)
+        text.textSize = min(dp(12f), max(dp(9.5f), scale * 0.36f))
     }
 
     private fun animateTo() {
@@ -161,9 +162,25 @@ class FloorPlanView(context: Context) : View(context) {
                 fill.alpha = ((if (g > 0.5f) 255 else if (has) 130 else 50) * a).toInt()
                 c.drawCircle(px(l[0], l[1]), py(l[0], l[1]), dp(if (g > 0.5f) 3.2f else 2.2f), fill)
             }
-            text.color = if (g > 0.5f) Color.rgb(42, 26, 0) else Color.rgb(205, 232, 238)
-            text.alpha = ((if (has || g > 0.5f) 235 else 120) * a).toInt()
-            c.drawText(z.name, px(z.label[0], z.label[1]), py(z.label[0], z.label[1]) + text.textSize * 1.25f, text)
+        }
+        // nomes por cima de tudo, numa etiqueta (legível sobre piso aceso ou parede)
+        for (z in FloorPlan.zones) {
+            val g = glow[z.id] ?: 0f
+            val has = states[z.id] != null
+            val lit = g > 0.5f
+            val cx = px(z.label[0], z.label[1])
+            val cy = py(z.label[0], z.label[1]) + text.textSize * 1.35f
+            val w = text.measureText(z.name) / 2 + dp(6f)
+            val top = cy - text.textSize * 0.95f
+            val bottom = cy + text.textSize * 0.38f
+            fill.shader = null
+            fill.color = if (lit) Color.rgb(70, 44, 8) else Color.rgb(6, 14, 17)
+            fill.alpha = ((if (lit) 225 else 200) * a).toInt()
+            label.set(cx - w, top, cx + w, bottom)
+            c.drawRoundRect(label, dp(6f), dp(6f), fill)
+            text.color = if (lit) Color.rgb(255, 233, 176) else Color.rgb(214, 238, 243)
+            text.alpha = ((if (has || lit) 245 else 130) * a).toInt()
+            c.drawText(z.name, cx, cy, text)
         }
         if (animating) postInvalidateOnAnimation()
     }
