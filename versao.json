@@ -1,0 +1,8 @@
+{
+  "versionCode": 22,
+  "versionName": "1.9.6",
+  "notes": "Visual refinado + correção da leitura da casa (inclui tudo da 1.9.5):\n• Janelas (atualização, diagnóstico, confirmações) agora escuras e legíveis; antes a MIUI pintava de cinza claro com letra branca.\n• Botões no estilo do Jarvis: contorno ciano e cantos arredondados, em todas as telas.\n• Configurações com cabeçalho próprio, versão no topo, cada seção num cartão e o Salvar em destaque.\n• Campos, chaves e barras na cor do app; a MIUI não força mais o modo escuro dela por cima.\n• Atualizações aparecem na hora (sem o cache de até 5 minutos do GitHub).",
+  "apk": "JarvisHome-1.9.6-22.apk",
+  "size": 15586735,
+  "sha256": "8ece93ed38b5b0b8697a922a656116bddf0b653919e6c17e5eaeb2846191d15f"
+}
