@@ -38,7 +38,9 @@ class HaDirectBackend(
     internal val localLights: Boolean = true,
     internal val trained: List<LightCommands.Trained> = emptyList(),
     /** Plano de treino salvo (para "Hey Tony, começa o treino"). */
-    internal val workoutPlan: br.com.jarvishome.commands.Workout.Plan = br.com.jarvishome.commands.Workout.Plan(30, 30, 30, emptyList())
+    internal val workoutPlan: br.com.jarvishome.commands.Workout.Plan = br.com.jarvishome.commands.Workout.Plan(30, 30, 30, emptyList()),
+    /** Correções aprendidas (frase ouvida normalizada → frase que funcionou). */
+    internal val learnedFixes: Map<String, String> = emptyMap()
 ) : Backend {
 
     internal val base = baseUrl.trimEnd('/')
@@ -310,6 +312,19 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             // ---- Etapa 2: limpar e corrigir com os nomes da casa
             var text = TextCorrector.stripWakeWord(heard, backend.wakeNames)
 
+            // "Hey Tony, não era isso": esquece o último aprendizado
+            if (text.isNotBlank() && br.com.jarvishome.commands.Learning.isUndo(text)) {
+                val what = try { br.com.jarvishome.commands.Learning.onUndo?.invoke() } catch (e: Exception) { null }
+                val speech = if (what != null) "Tudo bem, esqueci: $what." else "Não aprendi nada nos últimos minutos."
+                JLog.i("Desfazer aprendizado: ${what ?: "(nada)"}")
+                onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "aprendizado"))
+                onEvent(JSONObject().put("type", "response").put("text", speech).put("response_type", "action_done")
+                    .put("continue_conversation", false))
+                val url = try { HaDirectBackend.speakOn(socket, 7, backend.pipelineId, speech) } catch (e: Exception) { null }
+                if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
+                return
+            }
+
             // Timers e alarmes: no próprio app (funcionam sem internet).
             if (text.isNotBlank()) {
                 val reply = try { Timers.handle(text) } catch (e: Exception) { JLog.w("Timer", e); null }
@@ -367,7 +382,12 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             }
 
             val spoken = text
-            if (backend.correctText) {
+            // aprendido: essa frase só funcionou corrigida antes → vai direto corrigida
+            br.com.jarvishome.commands.Learning.lookup(backend.learnedFixes, spoken)?.let {
+                JLog.i("Aprendido: “$spoken” → “$it”")
+                text = it
+            }
+            if (backend.correctText && text == spoken) {
                 val fixed = TextCorrector.correct(text, backend.fullVocabulary())
                 if (fixed != text) JLog.i("Correção: “$text” → “$fixed”")
                 text = fixed
@@ -389,6 +409,10 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 JLog.i("2ª tentativa: “$text” → “$retry”")
                 onEvent(JSONObject().put("type", "transcription").put("text", retry).put("heard", heard).put("retry", true))
                 runIntent(socket, 3, retry, false, onEvent)
+                if (lastResponseType == "action_done" || lastResponseType == "query_answer") {
+                    // deu certo na 2ª tentativa: da próxima vez a frase vai direto corrigida
+                    try { br.com.jarvishome.commands.Learning.onLearnFix?.invoke(spoken, retry) } catch (_: Exception) {}
+                }
             }
         } catch (e: Exception) {
             if (cancelled) return
@@ -404,7 +428,8 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             try { backend.refreshVocabulary() } catch (e: Exception) { JLog.w("Não li as luzes", e) }
         }
         val lights = HaDirectBackend.lights
-        val action = LightCommands.resolve(spoken, lights, backend.trained)
+        val fromSpoken = LightCommands.resolve(spoken, lights, backend.trained)
+        val action = fromSpoken
             ?: (if (text != spoken) LightCommands.resolve(text, lights, backend.trained) else null)
             ?: return false
         val ids = JSONArray()
@@ -426,6 +451,13 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         onEvent(JSONObject().put("type", "response").put("text", speech)
             .put("response_type", if (ok) "action_done" else "error").put("continue_conversation", false))
         if (ok) LightCommands.onChange?.invoke()
+        // deu certo só depois da correção: a frase como foi ouvida passa a valer para essa luz
+        if (ok && fromSpoken == null && (action.all || action.lights.size == 1)) {
+            try {
+                br.com.jarvishome.commands.Learning.onLearnLight?.invoke(spoken, action.on,
+                    if (action.all) LightCommands.ALL else action.lights[0].entityId)
+            } catch (_: Exception) {}
+        }
         val url = try { HaDirectBackend.speakOn(socket, 4, backend.pipelineId, speech) } catch (e: Exception) { null }
         if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
         return true
@@ -435,6 +467,8 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
      * Roda intent→tts. Com [allowRetry], um "não entendi" da casa é guardado em silêncio e a função
      * devolve true para o chamador tentar outra frase; senão repassa tudo e devolve false.
      */
+    @Volatile private var lastResponseType = ""
+
     private fun runIntent(socket: MiniWebSocket, id: Int, text: String, allowRetry: Boolean,
                           onEvent: (JSONObject) -> Unit): Boolean {
         socket.readTimeoutMs = (HaDirectBackend.RUN_TIMEOUT_MS + 5000).toInt()
@@ -466,6 +500,7 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                             val speech = response.optJSONObject("speech")?.optJSONObject("plain")
                                 ?.optString("speech") ?: ""
                             val rtype = response.optString("response_type")
+                            lastResponseType = rtype
                             val code = response.optJSONObject("data")?.optString("code") ?: ""
                             if (allowRetry && rtype == "error" && code in HaDirectBackend.RETRY_CODES) notUnderstood = true
                             val cid = out.optString("conversation_id", "")

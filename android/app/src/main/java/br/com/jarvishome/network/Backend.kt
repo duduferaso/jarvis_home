@@ -41,7 +41,9 @@ object Backends {
             calendarWrite = prefs.calendarWrite,
             localLights = prefs.localLights,
             trained = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands),
-            workoutPlan = prefs.workoutPlan()
+            workoutPlan = prefs.workoutPlan(),
+            learnedFixes = if (prefs.learnFromSuccess)
+                br.com.jarvishome.commands.Learning.asMap(br.com.jarvishome.commands.Learning.decode(prefs.learnedFixes)) else emptyMap()
         )
         else JarvisApi(prefs)
 }

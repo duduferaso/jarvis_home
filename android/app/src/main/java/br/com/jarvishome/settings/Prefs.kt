@@ -142,6 +142,15 @@ class Prefs(context: Context) {
         get() = sp.getString("floor_map", "{}") ?: "{}"
         set(v) = sp.edit().putString("floor_map", v).apply()
 
+    /** Reforço: aprender quando um comando dá certo. */
+    var learnFromSuccess: Boolean
+        get() = sp.getBoolean("learn_from_success", true)
+        set(v) = sp.edit().putBoolean("learn_from_success", v).apply()
+    /** Correções aprendidas (JSON). */
+    var learnedFixes: String
+        get() = sp.getString("learned_fixes", "[]") ?: "[]"
+        set(v) = sp.edit().putString("learned_fixes", v).apply()
+
     var silenceMs: Int
         get() = sp.getInt("silence_ms", 900)
         set(v) = sp.edit().putInt("silence_ms", v.coerceIn(400, 2500)).apply()

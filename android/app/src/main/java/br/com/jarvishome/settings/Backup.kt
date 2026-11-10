@@ -19,7 +19,7 @@ object Backup {
 
     const val FORMAT = 1
     /** Arquivos de treino (dentro de filesDir) que vão na cópia. */
-    private val FILES = listOf("personal/vozes.tpl")
+    private val FILES = listOf("personal/vozes.tpl", "personal/aprendidos.tpl")
     /** Preferências que não devem passar de um celular para outro. */
     private val SKIP = setOf("provision_id", "last_update_check", "timers")
 

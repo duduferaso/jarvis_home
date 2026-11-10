@@ -106,6 +106,29 @@ fun main() {
     session(bt, 3)
     ok(!br.com.jarvishome.commands.Workout.active, "\"para o treino\" encerrou")
 
+    println("1g) Reforço: aprende o que deu certo")
+    val L = br.com.jarvishome.commands.Learning
+    var learnedFix: Pair<String, String>? = null
+    var learnedLight: String? = null
+    L.onLearnFix = { h, s2 -> learnedFix = h to s2 }
+    L.onLearnLight = { h, on, t -> learnedLight = "$h|$on|$t" }
+    stt(base, "Jarvis, consultar gastos da.")
+    session(b, 10)
+    ok(learnedFix?.second == "consultar gastos", "2ª tentativa que deu certo vira correção aprendida: $learnedFix")
+    val bl = HaDirectBackend(base, "HA_FAKE", "", wakeNames = listOf("Jarvis"), learnedFixes = mapOf(L.key("consultar gastos da.") to "consultar gastos"))
+    stt(base, "Jarvis, consultar gastos da.")
+    val e1g = session(bl, 10)
+    ok(e1g.count { it.optString("type") == "transcription" } == 1 &&
+        e1g.any { it.optString("type") == "response" && it.optString("response_type") != "error" }, "com o aprendizado vai direto, sem errar antes")
+    stt(base, "Jarvis, ligar luz do zoquart.")
+    session(b, 10)
+    ok(learnedLight == "ligar luz do zoquart.|true|light.luz_do_quarto", "luz que só funcionou corrigida: aprende a frase ouvida ($learnedLight)")
+    L.onUndo = { "a última correção" }
+    stt(base, "Tony, não era isso.")
+    val eu = session(b, 3)
+    ok(eu.any { it.optString("type") == "response" && it.optString("text") == "Tudo bem, esqueci: a última correção." }, "\"não era isso\" desfaz")
+    L.onLearnFix = null; L.onLearnLight = null; L.onUndo = null
+
     println("1b) Whisper ouve \"Jarvis, consultar gastos da.\" e a casa não entende")
     stt(base, "Jarvis, consultar gastos da.")
     val e1b = session(b, 10)

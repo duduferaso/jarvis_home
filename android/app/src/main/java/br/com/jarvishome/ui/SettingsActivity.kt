@@ -76,6 +76,7 @@ class SettingsActivity : Activity() {
     private lateinit var swCorrect: Switch
     private lateinit var swLocalLights: Switch
     private lateinit var swFloorPlan: Switch
+    private lateinit var swLearn: Switch
     private lateinit var vocabField: EditText
     private lateinit var swWake: Switch
     private lateinit var swBeep: Switch
@@ -174,6 +175,7 @@ class SettingsActivity : Activity() {
             "Chamada por voz: detector pessoal (recomendado)" to "Voz",
             "Chamada por voz: modelo em inglês (alternativo)" to "Voz",
             "Avançado: variações da palavra" to "Voz",
+            "Aprendizado (reforço)" to "Voz",
             "Comandos de luz" to "Comandos",
             "Entender melhor os comandos" to "Comandos",
             "Treino" to "Comandos",
@@ -398,6 +400,37 @@ class SettingsActivity : Activity() {
                 }
                 .setNegativeButton("Cancelar", null)
                 .show()
+        }
+
+        section("Aprendizado (reforço)")
+        swLearn = switch("Aprender quando um comando dá certo", prefs.learnFromSuccess)
+        run {
+            val L = br.com.jarvishome.commands.Learning
+            val nWake = br.com.jarvishome.wakeword.PersonalStore.loadLearned(this).size
+            val nFix = L.decode(prefs.learnedFixes).size
+            note("Quando a casa entende e executa um comando, o Jarvis guarda o que funcionou: a gravação daquele " +
+                "“Hey Tony” (com o barulho real da casa) vira mais um exemplo, e frases que só deram certo corrigidas " +
+                "passam a ir direto. Se ele aprender algo errado, diga “Hey Tony, não era isso”.\n" +
+                "Aprendido até agora: $nWake chamadas (máx. ${br.com.jarvishome.wakeword.PersonalStore.MAX_LEARNED}, as mais antigas saem) e $nFix correções.")
+            button("Ver o que aprendeu") {
+                val fixes = L.decode(prefs.learnedFixes).sortedByDescending { it.hits }
+                val txt = "Chamadas do “Hey Tony” aprendidas: $nWake\n\n" +
+                    (if (fixes.isEmpty()) "Nenhuma correção aprendida ainda."
+                     else "Correções:\n" + fixes.joinToString("\n") { "• “${it.heard}” → “${it.sent}” (${it.hits}×)" })
+                AlertDialog.Builder(this).setTitle("Aprendizado").setMessage(txt).setPositiveButton("Fechar", null).show()
+            }
+            button("Esquecer o aprendizado") {
+                AlertDialog.Builder(this).setMessage("Apagar as chamadas e correções aprendidas no uso? " +
+                        "O treino feito por vocês (vozes e comandos de luz) continua.")
+                    .setPositiveButton("Apagar") { _, _ ->
+                        br.com.jarvishome.wakeword.PersonalStore.clearLearned(this)
+                        prefs.learnedFixes = "[]"
+                        JLog.i("Aprendizado apagado")
+                        JarvisForegroundService.send(this, JarvisForegroundService.ACTION_RELOAD)
+                        recreate()
+                    }
+                    .setNegativeButton("Cancelar", null).show()
+            }
         }
 
         section("Chamada por voz: modelo em inglês (alternativo)")
@@ -698,6 +731,7 @@ class SettingsActivity : Activity() {
         prefs.correctText = swCorrect.isChecked
         prefs.localLights = swLocalLights.isChecked
         prefs.showFloorPlan = swFloorPlan.isChecked
+        prefs.learnFromSuccess = swLearn.isChecked
         prefs.extraVocabulary = vocabField.text.toString()
         prefs.calendarEnabled = swCalendar.isChecked
         prefs.agendaReminders = swReminders.isChecked

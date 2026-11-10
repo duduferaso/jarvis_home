@@ -61,6 +61,83 @@ class JarvisForegroundService : Service() {
     @Volatile private var mode = Mode.IDLE
     @Volatile private var running = false
     @Volatile private var manualTrigger = false
+
+    // ---------------------------------------------------------------- reforço (aprendizado)
+    /** A chamada que abriu a conversa atual (vira exemplo se o comando der certo). */
+    @Volatile private var learnCandidate: Array<FloatArray>? = null
+    private class Learned(val kind: String, val at: Long, val what: String, val undo: () -> Unit)
+    private val learnedStack = ArrayDeque<Learned>()
+
+    private fun remember(kind: String, what: String, undo: () -> Unit) {
+        synchronized(learnedStack) {
+            learnedStack.addLast(Learned(kind, System.currentTimeMillis(), what, undo))
+            while (learnedStack.size > 20) learnedStack.removeFirst()
+        }
+    }
+
+    private fun setupLearning() {
+        val L = br.com.jarvishome.commands.Learning
+        L.onLearnFix = fix@{ heard, sent ->
+            if (!prefs.learnFromSuccess) return@fix
+            synchronized(learnedStack) {
+                val list = L.decode(prefs.learnedFixes)
+                val existed = list.any { L.key(it.heard) == L.key(heard) }
+                prefs.learnedFixes = L.encode(L.addFix(list, heard, sent, System.currentTimeMillis()))
+                JLog.i("Aprendi a correção: “$heard” → “$sent”")
+                if (!existed) remember("correção", "“$heard” vira “$sent”") {
+                    prefs.learnedFixes = L.encode(L.decode(prefs.learnedFixes).filter { L.key(it.heard) != L.key(heard) })
+                }
+            }
+        }
+        L.onLearnLight = light@{ heard, on, target ->
+            if (!prefs.learnFromSuccess) return@light
+            synchronized(learnedStack) {
+                val list = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands).toMutableList()
+                val entry = br.com.jarvishome.commands.LightCommands.Trained(heard.trim().trimEnd('.', '!', '?'), on, target)
+                if (list.any { it == entry }) return@light
+                list.add(entry)
+                prefs.trainedCommands = br.com.jarvishome.commands.LightCommands.encode(list)
+                JLog.i("Aprendi o comando de luz: “${entry.heard}” → " + (if (on) "ligar " else "desligar ") + target)
+                remember("luz", "“${entry.heard}”") {
+                    prefs.trainedCommands = br.com.jarvishome.commands.LightCommands.encode(
+                        br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands).filter { it != entry })
+                }
+            }
+        }
+        L.onUndo = {
+            synchronized(learnedStack) {
+                val last = learnedStack.lastOrNull()
+                if (last == null || System.currentTimeMillis() - last.at > 10 * 60_000) null
+                else {
+                    learnedStack.removeLast()
+                    try { last.undo() } catch (e: Exception) { JLog.w("Desfazer", e) }
+                    last.what
+                }
+            }
+        }
+    }
+
+    /** O comando deu certo: a chamada que abriu a conversa vira mais um exemplo de voz. */
+    private fun learnWake(frames: Array<FloatArray>) {
+        Thread {
+            try {
+                val current = PersonalStore.loadForDetection(this)
+                val d = current.score(frames).distance
+                if (d < 0.05f) { JLog.i("Chamada parecida com um exemplo que já existe (" + String.format(Locale.US, "%.3f", d) + "); não guardei"); return@Thread }
+                val list = PersonalStore.loadLearned(this)
+                list.add(frames)
+                PersonalStore.saveLearned(this, list)
+                personal?.learn(frames)
+                JLog.i("Aprendi esta chamada do “Hey Tony” (" + list.size.coerceAtMost(PersonalStore.MAX_LEARNED) + " de " + PersonalStore.MAX_LEARNED + ")")
+                remember("chamada", "a última chamada do “Hey Tony”") {
+                    val l = PersonalStore.loadLearned(this)
+                    l.removeAll { it.size == frames.size && it.contentDeepEquals(frames) }
+                    PersonalStore.saveLearned(this, l)
+                    personal?.forget(frames)
+                }
+            } catch (e: Exception) { JLog.w("Não consegui aprender a chamada", e) }
+        }.start()
+    }
     @Volatile private var reloadWake = true
     @Volatile private var resetWake = false
     @Volatile private var cooldownUntil = 0L
@@ -127,6 +204,7 @@ class JarvisForegroundService : Service() {
         main.post(healthLoop)
         HomeMonitor.onAnnouncement = { text -> main.post { announce(text) } }
         HomeMonitor.start(this)
+        setupLearning()
         Timers.restore(prefs.timers)
         Timers.onChange = { prefs.timers = Timers.encode() }
         main.post(timerLoop)
@@ -365,6 +443,7 @@ class JarvisForegroundService : Service() {
                     }
                     if (manualTrigger) {
                         manualTrigger = false
+                        learnCandidate = null
                         trigger = "toque"
                     }
                     if (trigger != null) beginListening(trigger, lastBytes)
@@ -399,10 +478,12 @@ class JarvisForegroundService : Service() {
         if (prefs.personalDetector) {
             try {
                 StateBus.wakeWordStatus = "Carregando detector pessoal…"
-                val set = PersonalStore.load(this)
+                val set = PersonalStore.loadForDetection(this)
+                val learned = PersonalStore.loadLearned(this).size
                 personal = PersonalWakeWord(this, set)
                 wakeOk = true
                 StateBus.wakeWordStatus = "Pessoal · " + set.templates.size + " exemplos" +
+                    (if (learned > 0) " ($learned aprendidos no uso)" else "") +
                     (if (PersonalStore.hasCustom(this)) "" else " (gravação da casa)") +
                     " · limiar " + String.format(Locale.US, "%.3f", set.threshold)
                 JLog.i("Detector pessoal pronto: " + StateBus.wakeWordStatus)
@@ -430,6 +511,7 @@ class JarvisForegroundService : Service() {
 
     /** Detector pessoal: comando falado de uma vez já vem no áudio; com pausa, abre o microfone. */
     private fun beginPersonal(hit: PersonalWakeWord.Trigger) {
+        learnCandidate = hit.learnFrames
         val audio = if (hit.oneBreath) hit.whole + hit.afterSegment else hit.afterSegment
         val pcm = if (audio.isNotEmpty()) floatsToBytes(audio) else null
         beginListening(
@@ -537,6 +619,14 @@ class JarvisForegroundService : Service() {
                 responseType.isNotEmpty() -> "respondido"
                 else -> "sem resposta"
             }, local))
+
+        // reforço: a casa entendeu e respondeu → a chamada era de verdade
+        val candidate = learnCandidate
+        learnCandidate = null
+        if (candidate != null && prefs.learnFromSuccess && errCode == null &&
+            (responseType == "action_done" || responseType == "query_answer") && local != "aprendizado") {
+            learnWake(candidate)
+        }
 
         val code = errCode
         if (code == "only-wake-word") {
