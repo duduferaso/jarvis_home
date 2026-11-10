@@ -1,0 +1,8 @@
+{
+  "versionCode": 32,
+  "versionName": "1.12.0",
+  "notes": "Reforço: o Jarvis aprende quando dá certo.\n• Chamada: quando a casa entende e executa o comando, a gravação daquele \"Hey Tony\" (com o barulho real da casa, como TV) vira mais um exemplo. Guarda até 15; as mais antigas saem.\n• Correções: se um comando só funcionou na 2ª tentativa, da próxima vez a frase já vai corrigida.\n• Luzes: se a luz só ligou depois de corrigir o que o Whisper ouviu, aquela frase passa a valer direto.\n• Errou? Diga \"Hey Tony, não era isso\" para desfazer o último aprendizado (até 10 min depois).\n• ⚙ > Voz > Aprendizado: ligar/desligar, ver o que aprendeu e esquecer. Entra na cópia dos treinos de voz.",
+  "apk": "JarvisHome-1.12.0-32.apk",
+  "size": 15623599,
+  "sha256": "8af54661e37a873383494339eae2b84027dafac453861085510f6352c0475f6e"
+}
