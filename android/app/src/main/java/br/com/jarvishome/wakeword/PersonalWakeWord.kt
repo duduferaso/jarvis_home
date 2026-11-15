@@ -79,6 +79,9 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
         return FloatArray((b - a).toInt()) { ring[((a + it) % RING).toInt()] }
     }
 
+    /** < 1 deixa o detector mais exigente por um tempo (ex.: várias ativações à toa com a TV ligada). */
+    @Volatile var strictness = 1f
+
     @Volatile private var pendingAdd: Array<FloatArray>? = null
     @Volatile private var pendingRemove: Array<FloatArray>? = null
 
@@ -106,7 +109,8 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
             // treinados por vocês: limiar normal; aprendidos no uso: mais exigentes (evita ativar sozinho)
             val trained = set.score(feats.frames, to = trainedCount)
             val learned = if (set.templates.size > trainedCount) set.score(feats.frames, from = trainedCount) else null
-            val viaLearned = trained.distance > set.threshold && learned != null && learned.distance <= set.threshold * LEARNED_STRICT
+            val limit = set.threshold * strictness
+            val viaLearned = trained.distance > limit && learned != null && learned.distance <= limit * LEARNED_STRICT
             val score = if (viaLearned) learned!! else trained
             lastDistance = score.distance
             // registro para entender quando a chamada não pega (ex.: TV falando junto)
@@ -118,7 +122,7 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
                 JLog.i(String.format(java.util.Locale.US, "Chamada não reconhecida: distância %.3f (limiar %.3f), fala de %.1f s%s",
                     score.distance, set.threshold, secs, if (secs > 3f) " — fala longa: barulho/TV junto?" else ""))
             }
-            if (score.distance <= set.threshold && (viaLearned || score === trained)) {
+            if (score.distance <= limit && (viaLearned || score === trained)) {
                 val endFrame = if (score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
                 val wakeEndInSeg = max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)
                 val command = if (wakeEndInSeg < samples.size) samples.copyOfRange(wakeEndInSeg, samples.size) else FloatArray(0)

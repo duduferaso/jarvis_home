@@ -67,6 +67,25 @@ class JarvisForegroundService : Service() {
     @Volatile private var learnCandidate: Array<FloatArray>? = null
     /** Se a ativação veio só de um exemplo aprendido: ele (para esquecer se foi à toa). */
     @Volatile private var activatedByLearned: Array<FloatArray>? = null
+    /** Ativações pelo detector que não trouxeram fala nenhuma (prováveis ativações sozinho). */
+    private val emptyActivations = ArrayDeque<Long>()
+    @Volatile private var lastActivationByDetector = false
+    private var strictUntil = 0L
+
+    /** Duas ativações à toa em 10 min: detector 8% mais exigente por 30 min (TV ligada, conversa…). */
+    private fun noteEmptyActivation() {
+        val now = System.currentTimeMillis()
+        emptyActivations.addLast(now)
+        while (emptyActivations.isNotEmpty() && now - emptyActivations.first() > 10 * 60_000) emptyActivations.removeFirst()
+        if (emptyActivations.size >= 2 && now > strictUntil) {
+            strictUntil = now + 30 * 60_000
+            personal?.strictness = 0.92f
+            JLog.i("Várias ativações sem fala: detector mais exigente por 30 min")
+            main.postDelayed({
+                if (System.currentTimeMillis() >= strictUntil) { personal?.strictness = 1f; JLog.i("Detector voltou ao normal") }
+            }, 30 * 60_000L + 1000)
+        }
+    }
     private class Learned(val kind: String, val at: Long, val what: String, val undo: () -> Unit)
     private val learnedStack = ArrayDeque<Learned>()
 
@@ -463,6 +482,7 @@ class JarvisForegroundService : Service() {
                         manualTrigger = false
                         learnCandidate = null
                         activatedByLearned = null
+                        lastActivationByDetector = false
                         trigger = "toque"
                     }
                     if (trigger != null) beginListening(trigger, lastBytes)
@@ -506,7 +526,7 @@ class JarvisForegroundService : Service() {
                 val trainedCount = PersonalStore.load(this).templates.size
                 val set = PersonalStore.loadForDetection(this)
                 val learned = set.templates.size - trainedCount
-                personal = PersonalWakeWord(this, set, trainedCount)
+                personal = PersonalWakeWord(this, set, trainedCount).also { if (System.currentTimeMillis() < strictUntil) it.strictness = 0.92f }
                 wakeOk = true
                 StateBus.wakeWordStatus = "Pessoal · " + set.templates.size + " exemplos" +
                     (if (learned > 0) " ($learned aprendidos no uso)" else "") +
@@ -539,6 +559,7 @@ class JarvisForegroundService : Service() {
     private fun beginPersonal(hit: PersonalWakeWord.Trigger) {
         learnCandidate = hit.learnFrames
         activatedByLearned = hit.viaLearned
+        lastActivationByDetector = true
         val audio = if (hit.oneBreath) hit.whole + hit.afterSegment else hit.afterSegment
         val pcm = if (audio.isNotEmpty()) floatsToBytes(audio) else null
         beginListening(
@@ -740,8 +761,9 @@ class JarvisForegroundService : Service() {
         var state = AssistantState.ERROR
         when {
             code == "network" -> {
-                display = "Não consegui conectar à casa"
-                speech = "Não consegui conectar à casa."
+                display = "Sem conexão com o Home Assistant"
+                speech = "Estou sem conexão com o Home Assistant."
+                JLog.w("Home Assistant fora do alcance: servidor desligado, reiniciando, ou Wi-Fi do celular/roteador com problema")
             }
             code == "not_configured" -> {
                 display = "Configure o servidor (engrenagem)"
@@ -762,8 +784,9 @@ class JarvisForegroundService : Service() {
             }
             code == "stt-no-text-recognized" -> {
                 state = AssistantState.CONFUSED
-                display = "Não entendi"
-                speech = "Desculpe, não entendi."
+                display = "Não ouvi nenhum comando"
+                // ativação pelo detector sem fala nenhuma = provavelmente acordou sozinho: volta em silêncio
+                if (lastActivationByDetector) noteEmptyActivation() else speech = "Desculpe, não ouvi."
             }
             else -> display = message?.takeIf { it.isNotBlank() } ?: "Algo deu errado ($code)"
         }
