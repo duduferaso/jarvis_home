@@ -130,7 +130,7 @@ class CommandTrainingActivity : Activity() {
                     instruction.text = if (l.isEmpty()) "Nenhuma luz no Home Assistant" else "Toque em Gravar e fale o comando"
                     render()
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Treino de comandos: não li as luzes", e)
                 ui { instruction.text = "Não consegui ler o Home Assistant"; status.text = e.message ?: "" }
             }
@@ -228,13 +228,13 @@ class CommandTrainingActivity : Activity() {
             ui { status.text = "Vendo como o Home Assistant entendeu…"; level.progress = 0 }
             val heard = try {
                 HaDirectBackend(prefs.serverUrl, prefs.token, prefs.pipelineId).transcribeAudio(toPcm(audio))
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Treino de comandos: transcrição falhou", e)
                 ui { status.text = "O Home Assistant não respondeu: " + (e.message ?: "") }
                 Thread.sleep(2500)
                 return
             }
-            val text = TextCorrector.stripWakeWord(heard, listOf("Hey Tony", "Tony", "Toni", "Tonie")).trim().trimEnd('.', '!', '?')
+            val text = TextCorrector.stripWakeWord(heard, br.com.jarvishome.wakeword.WakeWords.names(prefs) + listOf("Toni", "Tonie")).trim().trimEnd('.', '!', '?')
             if (LightCommands.words(text).isEmpty()) {
                 if (++tries >= 3) return
                 ui { status.text = "Não ouvi nada. Vamos repetir." }

@@ -31,6 +31,7 @@ import br.com.jarvishome.domain.JLog
 import br.com.jarvishome.domain.StateBus
 import br.com.jarvishome.home.FloorPlan
 import br.com.jarvishome.home.HomeApi
+import br.com.jarvishome.home.LightControl
 import br.com.jarvishome.home.HomeModel
 import br.com.jarvishome.home.HomeMonitor
 import br.com.jarvishome.home.HomeParser
@@ -572,19 +573,9 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
             return
         }
         val on = FloorPlan.isOn(z, map, HomeModel.relays) == true
-        for (id in ids) HomeModel.setLightOptimistic(id, !on)
-        val p = prefs
-        Thread {
-            try {
-                val arr = org.json.JSONArray(); ids.forEach { arr.put(it) }
-                HomeApi(p.serverUrl, p.token).callService("homeassistant", if (on) "turn_off" else "turn_on",
-                    org.json.JSONObject().put("entity_id", arr))
-            } catch (e: Throwable) {
-                JLog.w("Falha ao mudar ${z.name}", e)
-                runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${z.name}", Toast.LENGTH_SHORT).show() }
-            }
-            HomeMonitor.refreshSoon(); handler.postDelayed({ HomeMonitor.refreshSoon() }, 2500)
-        }.start()
+        LightControl.set(prefs, ids, !on, "a luz de ${z.name}") { msg ->
+            runOnUiThread { Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show() }
+        }
     }
 
     /** Toque longo num cômodo: escolher quais luzes/relés do Home Assistant ele controla. */
@@ -632,17 +623,9 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         contentDescription = l.name + if (on) ", ligada" else ", desligada"
         setOnClickListener {
             if (!l.available) return@setOnClickListener
-            HomeModel.setLightOptimistic(l.entityId, !l.on)
-            val p = prefs
-            Thread {
-                try {
-                    HomeApi(p.serverUrl, p.token).toggle(l.entityId)
-                } catch (e: Throwable) {
-                    JLog.w("Falha ao alternar ${l.entityId}", e)
-                    runOnUiThread { Toast.makeText(this@MainActivity, "Não consegui mudar ${l.name}", Toast.LENGTH_SHORT).show() }
-                }
-                HomeMonitor.refreshSoon(); handler.postDelayed({ HomeMonitor.refreshSoon() }, 2500)
-            }.start()
+            LightControl.set(prefs, listOf(l.entityId), !l.on, l.name) { msg ->
+                runOnUiThread { Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show() }
+            }
         }
     }
 

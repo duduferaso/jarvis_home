@@ -94,6 +94,11 @@ object HomeModel {
         notifyListeners()
     }
 
+    /** O comando falhou: a tela volta a mostrar o que o Home Assistant informar. */
+    fun clearOptimistic(ids: Collection<String>) {
+        ids.forEach { pending.remove(it) }
+    }
+
     fun clear() {
         online = false
         lights = emptyList(); weather = null; alerts = emptyList(); serverInfo = emptyList()

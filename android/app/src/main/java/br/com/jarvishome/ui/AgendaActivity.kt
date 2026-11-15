@@ -83,7 +83,7 @@ class AgendaActivity : Activity() {
                 val start = LocalDate.now().atStartOfDay()
                 val events = if (cals.isEmpty()) emptyList() else api().events(cals.map { it.entityId }, start, start.plusDays(14))
                 runOnUiThread { calendars = cals; render(events) }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Agenda: falha ao carregar", e)
                 runOnUiThread { status.text = "Não consegui ler a agenda: " + HomeMonitor.describe(e) }
             }
@@ -152,7 +152,7 @@ class AgendaActivity : Activity() {
                         api().delete(e.calendar, e.uid, e.recurrenceId)
                         runOnUiThread { Toast.makeText(this, "Desmarcado", Toast.LENGTH_SHORT).show(); load() }
                         HomeMonitor.refreshAgendaSoon()
-                    } catch (ex: Exception) {
+                    } catch (ex: Throwable) {
                         JLog.w("Falha ao desmarcar", ex)
                         runOnUiThread { Toast.makeText(this, "Não consegui desmarcar: ${ex.message}", Toast.LENGTH_LONG).show() }
                     }
@@ -216,7 +216,7 @@ class AgendaActivity : Activity() {
                         }
                         runOnUiThread { Toast.makeText(this, "Marcado", Toast.LENGTH_SHORT).show(); load() }
                         HomeMonitor.refreshAgendaSoon()
-                    } catch (ex: Exception) {
+                    } catch (ex: Throwable) {
                         JLog.w("Falha ao marcar", ex)
                         runOnUiThread { Toast.makeText(this, "Não consegui marcar: ${ex.message}", Toast.LENGTH_LONG).show() }
                     }

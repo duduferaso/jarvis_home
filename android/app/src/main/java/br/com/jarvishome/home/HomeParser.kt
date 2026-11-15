@@ -42,7 +42,7 @@ object HomeParser {
 
     fun weatherName(condition: String): String = WEATHER_PT[condition] ?: condition.replaceFirstChar { it.uppercase() }
 
-    private fun norm(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+    private fun norm(s: String) = br.com.jarvishome.network.TextCorrector.normalize(s)
 
     private fun str(o: JSONObject?, k: String): String = if (o == null || !o.has(k) || o.isNull(k)) "" else o.optString(k)
 
@@ -89,10 +89,7 @@ object HomeParser {
 
             if (domain == "light" || domain == "switch") relays.add(FloorPlan.Relay(id, name, state == "on", available))
             when (domain) {
-                "light" -> lights.add(Light(id, shortLightName(name), state == "on", available))
-                "switch" -> if (n.startsWith("luz") || n.contains("lampada") || n.contains(" luz ")) {
-                    lights.add(Light(id, shortLightName(name), state == "on", available))
-                }
+                "light", "switch" -> if (br.com.jarvishome.commands.LightCommands.isLight(id, name)) lights.add(Light(id, shortLightName(name), state == "on", available))
                 "weather" -> if (weather == null && available && isFresh(st, now)) {
                     val t = attrs?.optDouble("temperature", Double.NaN) ?: Double.NaN
                     weather = Weather(if (t.isNaN()) null else t, str(attrs, "temperature_unit").ifEmpty { "°C" }, weatherName(state))

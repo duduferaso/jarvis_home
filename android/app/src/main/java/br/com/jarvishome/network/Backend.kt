@@ -32,9 +32,7 @@ object Backends {
     fun create(prefs: Prefs): Backend =
         if (prefs.directMode) HaDirectBackend(
             prefs.serverUrl, prefs.token, prefs.pipelineId,
-            wakeNames = (if (prefs.personalDetector) WakeWords.TONY else WakeWords.current(prefs)).let { p ->
-                listOf(p.display, p.display.removePrefix("Hey ")).distinct() + p.defaultLines.map { CalibrationAnalyzer.labelOf(it).replace('_', ' ') }
-            },
+            wakeNames = WakeWords.names(prefs),
             extraVocabulary = prefs.extraVocabulary.lines().map { it.trim() }.filter { it.length >= 3 },
             correctText = prefs.correctText,
             calendarEnabled = prefs.calendarEnabled,

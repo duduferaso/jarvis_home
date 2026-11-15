@@ -137,6 +137,15 @@ object WakeWords {
 
     fun current(prefs: Prefs): Profile = byId(prefs.wakeWordId)
 
+    /** A palavra que está valendo de fato: com o detector pessoal ligado é sempre "Hey Tony". */
+    fun active(prefs: Prefs): Profile = if (prefs.personalDetector) TONY else current(prefs)
+
+    /** Grafias da palavra ativa que são tiradas do começo da frase ("Hey Tony, liga…" → "liga…"). */
+    fun names(prefs: Prefs): List<String> = active(prefs).let { p ->
+        listOf(p.display, p.display.removePrefix("Hey ")).distinct() +
+            p.defaultLines.map { CalibrationAnalyzer.labelOf(it).replace('_', ' ') }
+    }
+
     /** Troca a palavra: volta às variações padrão dela até o usuário calibrar. */
     fun select(prefs: Prefs, profile: Profile) {
         if (prefs.wakeWordId == profile.id) return

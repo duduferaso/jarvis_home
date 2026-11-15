@@ -535,7 +535,8 @@ class SettingsActivity : Activity() {
             val dlg = AlertDialog.Builder(this).setTitle("Diagnóstico da agenda").setMessage("Testando…")
                 .setPositiveButton("Fechar", null).show()
             Thread {
-                val r = br.com.jarvishome.home.HomeMonitor.diagnose(p)
+                val r = try { br.com.jarvishome.home.HomeMonitor.diagnose(p) }
+                    catch (t: Throwable) { "O diagnóstico falhou: " + br.com.jarvishome.home.HomeMonitor.describe(t) }
                 JLog.i("Diagnóstico da agenda:\n$r")
                 handler.post { dlg.setMessage(r) }
                 br.com.jarvishome.home.HomeMonitor.refreshAgendaSoon()
@@ -561,7 +562,7 @@ class SettingsActivity : Activity() {
                     val api = HomeApi(p.serverUrl, p.token)
                     if (api.state(HomeParser.ANNOUNCE_ENTITY) == null) "O auxiliar input_text.jarvis_aviso ainda não existe no Home Assistant."
                     else { api.setText(HomeParser.ANNOUNCE_ENTITY, "Teste de aviso do Jarvis Home."); "Enviado. Em até 5 segundos o Jarvis fala." }
-                } catch (e: Exception) { "Falhou: " + (e.message ?: e.javaClass.simpleName) }
+                } catch (e: Throwable) { "Falhou: " + (e.message ?: e.javaClass.simpleName) }
                 handler.post { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
             }.start()
         }
@@ -635,10 +636,9 @@ class SettingsActivity : Activity() {
             JarvisForegroundService.send(this, JarvisForegroundService.ACTION_LISTEN)
             finish()
         }
-        button("Testar alto-falante") {
-            val p = player ?: AudioPlayer(this).also { player = it }
-            p.beep(true)
-            handler.postDelayed({ p.speakLocal("Teste de áudio do Jarvis Home.") {} }, 600)
+        button("Testar alto-falante (voz das respostas)") {
+            // a mesma voz e o mesmo volume das respostas de verdade (voz do Home Assistant)
+            JarvisForegroundService.send(this, JarvisForegroundService.ACTION_TEST_VOICE)
         }
         button("Desativar otimização de bateria") { openBatterySettings() }
         note("No Redmi/MIUI também ative: Configurações > Apps > Jarvis Home > Início automático, " +
@@ -675,7 +675,7 @@ class SettingsActivity : Activity() {
                 InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         }
         form.addView(keywordsField)
-        note("Tokens BPE do modelo (formato sherpa-onnx). Grave sua voz dizendo “Jarvis” e rode " +
+        note("Tokens BPE do modelo (formato sherpa-onnx). Grave sua voz dizendo “" + WakeWords.current(prefs).display + "” e rode " +
             "tools/calibrar_wakeword.py no servidor: ele gera as linhas certas para colar aqui.")
         button("Restaurar padrão da palavra") {
             keywordsField.setText(WakeWords.current(prefs).defaultLines.joinToString("\n"))
@@ -763,7 +763,9 @@ class SettingsActivity : Activity() {
         save()
         connResult.text = "Testando…"
         Thread {
-            val r = Backends.create(prefs).health()
+            val r = try { Backends.create(prefs).health() } catch (t: Throwable) {
+                JLog.w("Teste de conexão falhou", t); ConnectionState.DISCONNECTED
+            }
             StateBus.setConnection(r)
             val msg = when (r) {
                 ConnectionState.CONNECTED -> "✓ Home Assistant respondendo e token aceito"

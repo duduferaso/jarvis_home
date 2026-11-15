@@ -22,8 +22,8 @@ object LightCommands {
 
     const val ALL = "*"
 
-    /** Chamado depois de acionar uma luz (para a tela atualizar logo). */
-    @Volatile var onChange: (() -> Unit)? = null
+    /** Luzes mudadas por voz (ids, ligadas?): a tela mostra na hora, como no toque. */
+    @Volatile var onSet: ((List<String>, Boolean) -> Unit)? = null
 
     private val STOP = setOf(
         "a", "o", "as", "os", "luz", "luzes", "lampada", "lampadas", "lampadinha", "iluminacao",
@@ -44,6 +44,18 @@ object LightCommands {
         return if (a.length >= 4 && a.length == b.length && a.toList().sorted() == b.toList().sorted()) maxOf(r, 0.85) else r
     }
 
+    /**
+     * Regra ÚNICA do que é luz (tela, planta e voz usam esta): light.* sempre; switch.* só se o nome
+     * for de luz ("Luz da sala", "Lâmpada", "Iluminação", "Interruptor luz-varanda"…).
+     */
+    fun isLight(entityId: String, name: String): Boolean {
+        val domain = entityId.substringBefore('.')
+        if (domain == "light") return true
+        if (domain != "switch") return false
+        val n = " " + TextCorrector.normalize(name) + " "
+        return n.contains(" luz ") || n.contains(" luzes ") || n.contains("lampada") || n.contains(" ilumina")
+    }
+
     /** Luzes da casa: light.* e interruptores com nome de luz (mesma regra da tela). */
     fun lightsFrom(states: JSONArray): List<Light> {
         val out = ArrayList<Light>()
@@ -54,8 +66,7 @@ object LightCommands {
             val attrs = st.optJSONObject("attributes")
             val name = (if (attrs != null && attrs.has("friendly_name") && !attrs.isNull("friendly_name"))
                 attrs.optString("friendly_name") else "").ifEmpty { id.substringAfter('.').replace('_', ' ') }
-            val n = TextCorrector.normalize(name)
-            if (domain == "light" || (domain == "switch" && (n.startsWith("luz") || n.contains("lampada") || n.contains(" luz ")))) {
+            if (isLight(id, name)) {
                 out.add(Light(id, name.trim()))
             }
         }

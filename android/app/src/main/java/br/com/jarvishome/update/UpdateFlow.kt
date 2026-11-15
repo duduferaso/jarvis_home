@@ -33,7 +33,7 @@ object UpdateFlow {
             try {
                 val r = Updater.latest(p.updateRepo, p.updateToken)
                 if (r != null && r.versionCode > ApkInstaller.versionCode(app)) notify(app, r)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Atualização: verificação automática falhou", e)
             } finally {
                 checking = false
@@ -66,7 +66,7 @@ object UpdateFlow {
             .setNegativeButton("Fechar", null).show()
         Thread {
             val current = ApkInstaller.versionCode(activity)
-            val r = try { Updater.latest(p.updateRepo, p.updateToken) } catch (e: Exception) {
+            val r = try { Updater.latest(p.updateRepo, p.updateToken) } catch (e: Throwable) {
                 JLog.w("Atualização: falha ao procurar", e)
                 main.post { if (!activity.isFinishing) dlg.setMessage("Não consegui ver as versões: " + (e.message ?: e.javaClass.simpleName)) }
                 return@Thread
@@ -109,7 +109,7 @@ object UpdateFlow {
                     dlg.dismiss()
                     ApkInstaller.install(activity, f)
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Atualização: download falhou", e)
                 main.post { dlg.setCancelable(true); dlg.setMessage("O download falhou: " + (e.message ?: e.javaClass.simpleName)) }
             }

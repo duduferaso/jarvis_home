@@ -51,7 +51,10 @@ object HomeMonitor {
         }
         agendaDirty = true
         CalendarAssistant.onChange = { refreshAgendaSoon() }
-        br.com.jarvishome.commands.LightCommands.onChange = { refreshSoon() }
+        br.com.jarvishome.commands.LightCommands.onSet = { ids, on ->
+            for (id in ids) HomeModel.setLightOptimistic(id, on)
+            refreshSoon()
+        }
         val e = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "jarvis-casa").apply { isDaemon = true } }
         exec = e
         startedAt = System.currentTimeMillis(); tickStart = 0; tickEnd = 0

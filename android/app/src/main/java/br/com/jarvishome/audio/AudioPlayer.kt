@@ -21,7 +21,8 @@ import kotlin.math.sqrt
  * Alimenta StateBus.mouthLevel com a energia real do áudio, para a boca do personagem.
  * Todos os métodos devem ser chamados na thread principal.
  */
-class AudioPlayer(private val context: Context) {
+/** [volume]: o mesmo volume das respostas vale para a voz de contingência do Android. */
+class AudioPlayer(private val context: Context, private val volume: () -> Float = { 1f }) {
 
     private val main = Handler(Looper.getMainLooper())
     private var player: MediaPlayer? = null
@@ -38,6 +39,11 @@ class AudioPlayer(private val context: Context) {
                 if (status == TextToSpeech.SUCCESS) {
                     val r = tts?.setLanguage(Locale("pt", "BR")) ?: TextToSpeech.LANG_NOT_SUPPORTED
                     ttsReady = r != TextToSpeech.LANG_MISSING_DATA && r != TextToSpeech.LANG_NOT_SUPPORTED
+                    // mesmo canal de áudio das respostas do Home Assistant
+                    try {
+                        tts?.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                    } catch (_: Throwable) {}
                     JLog.i("Voz local de contingência: " + if (ttsReady) "pronta" else "sem voz pt-BR instalada")
                 }
             }
@@ -124,7 +130,9 @@ class AudioPlayer(private val context: Context) {
                 }
             }
         })
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "jarvis-local")
+        val params = android.os.Bundle()
+        params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, volume().coerceIn(0f, 1f))
+        engine.speak(text, TextToSpeech.QUEUE_FLUSH, params, "jarvis-local")
     }
 
     private fun attachVisualizer(sessionId: Int) {

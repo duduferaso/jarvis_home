@@ -150,7 +150,7 @@ class JarvisForegroundService : Service() {
                 l.removeAll { it.size == t.size && it.contentDeepEquals(t) }
                 if (l.size < n) PersonalStore.saveLearned(this, l)
                 JLog.i("Ativou sem comando por um exemplo aprendido: esqueci esse exemplo (restam ${l.size})")
-            } catch (e: Exception) { JLog.w("Não consegui esquecer o exemplo", e) }
+            } catch (e: Throwable) { JLog.w("Não consegui esquecer o exemplo", e) }
         }.start()
     }
 
@@ -172,7 +172,7 @@ class JarvisForegroundService : Service() {
                     PersonalStore.saveLearned(this, l)
                     personal?.forget(frames)
                 }
-            } catch (e: Exception) { JLog.w("Não consegui aprender a chamada", e) }
+            } catch (e: Throwable) { JLog.w("Não consegui aprender a chamada", e) }
         }.start()
     }
     @Volatile private var reloadWake = true
@@ -206,12 +206,12 @@ class JarvisForegroundService : Service() {
     }
 
     /**
-     * Fala SEMPRE com a voz do Jarvis (a do Home Assistant). A voz do Android só entra se a casa
+     * Fala SEMPRE com a voz do Home Assistant. A voz do Android só entra se a casa
      * estiver fora do alcance, e isso fica registrado nos logs.
      */
     private fun speakHa(text: String, onDone: () -> Unit) {
         voiceExecutor.execute {
-            val f = try { voiceFile(text) } catch (e: Exception) { JLog.w("Voz do Home Assistant falhou", e); null }
+            val f = try { voiceFile(text) } catch (e: Throwable) { JLog.w("Voz do Home Assistant falhou", e); null }
             main.post {
                 if (f != null) player.play(f, prefs.volume / 100f, onStart = {}, onDone = { ok ->
                     if (ok) onDone() else { JLog.w("Áudio não tocou; usando a voz do Android"); player.speakLocal(text) { onDone() } }
@@ -235,7 +235,7 @@ class JarvisForegroundService : Service() {
             val now = System.currentTimeMillis()
             for (i in Timers.due(now)) {
                 JLog.i("Timer acabou: " + Timers.name(i))
-                announce(Timers.finishedPhrase(i))
+                announce(Timers.finishedPhrase(i), requested = true)
             }
             val ringing = Timers.ringing()
             when {
@@ -259,7 +259,7 @@ class JarvisForegroundService : Service() {
     private lateinit var healthExecutor: ExecutorService
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.US)
     /** Avisos esperando a conversa atual terminar (só na thread principal). */
-    private val pendingAnnouncements = java.util.ArrayDeque<String>()
+    private val pendingAnnouncements = java.util.ArrayDeque<Pair<String, Boolean>>()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -268,7 +268,7 @@ class JarvisForegroundService : Service() {
         br.com.jarvishome.domain.CrashLog.install(this)
         Provisioning.apply(this)
         prefs = Prefs(this)
-        player = AudioPlayer(this)
+        player = AudioPlayer(this) { prefs.volume / 100f }
         sessionExecutor = Executors.newSingleThreadExecutor()
         healthExecutor = Executors.newSingleThreadExecutor()
         createChannel()
@@ -312,6 +312,10 @@ class JarvisForegroundService : Service() {
             ACTION_WAKE -> setSleeping(false)
             ACTION_TOGGLE_SLEEP -> setSleeping(mode != Mode.SLEEPING)
             ACTION_RELOAD -> reload()
+            ACTION_TEST_VOICE -> {
+                player.beep(prefs.beep)
+                speakHa("Teste de áudio. Esta é a voz que vai te responder.") {}
+            }
             ACTION_PAUSE_MIC -> {
                 // Calibração precisa do microfone só para ela.
                 paused = true
@@ -697,12 +701,16 @@ class JarvisForegroundService : Service() {
                 }
             }
             StateBus.setConnection(ConnectionState.CONNECTED)
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             if (s.cancelled) return
             JLog.w("Sessão falhou", e)
-            errCode = "network"
             errMsg = e.message
-            StateBus.setConnection(ConnectionState.DISCONNECTED)
+            errCode = when (e) {
+                is java.net.SocketTimeoutException -> "timeout"
+                is java.io.IOException -> "network"
+                else -> "internal" // defeito do app, não da rede
+            }
+            if (errCode == "network") StateBus.setConnection(ConnectionState.DISCONNECTED)
         }
         if (s.cancelled) return
         if (session === s) session = null
@@ -791,7 +799,7 @@ class JarvisForegroundService : Service() {
         cooldownUntil = System.currentTimeMillis() + 900
         resetWake = true
         if (cont) {
-            // O agente fez uma pergunta: reabre o microfone sem exigir "Jarvis" de novo.
+            // O agente fez uma pergunta: reabre o microfone sem exigir a palavra de ativação de novo.
             mode = Mode.IDLE
             manualTrigger = true
             return
@@ -836,6 +844,10 @@ class JarvisForegroundService : Service() {
                 // ativação pelo detector sem fala nenhuma = provavelmente acordou sozinho: volta em silêncio
                 if (lastActivationByDetector) noteEmptyActivation() else speech = "Desculpe, não ouvi."
             }
+            code == "internal" -> {
+                display = "Erro interno do app (veja os logs)"
+                speech = "Tive um problema aqui. Pode repetir?"
+            }
             else -> display = message?.takeIf { it.isNotBlank() } ?: "Algo deu errado ($code)"
         }
         JLog.w("Falha na interação: $code " + (message ?: ""))
@@ -852,15 +864,15 @@ class JarvisForegroundService : Service() {
     // ------------------------------------------------------------------ avisos e lembretes
 
     /** Mostra e fala um aviso do Home Assistant. Chamar na thread principal. */
-    private fun announce(text: String) {
+    private fun announce(text: String, requested: Boolean = false) {
         HomeModel.setAnnouncement(text)
-        val night = Night.isNight(prefs) && !prefs.speakAtNight
+        val night = !requested && Night.isNight(prefs) && !prefs.speakAtNight
         if (mode == Mode.SLEEPING || night) {
             JLog.i("Aviso só na tela (" + (if (night) "modo noite" else "repouso") + ")")
             return
         }
         if (mode != Mode.IDLE) {
-            pendingAnnouncements.addLast(text) // fala quando a conversa terminar
+            pendingAnnouncements.addLast(text to requested) // fala quando a conversa terminar
             return
         }
         mode = Mode.BUSY
@@ -872,7 +884,7 @@ class JarvisForegroundService : Service() {
             try {
                 file = voiceFile(text)
                 if (file == null && backend !is HaDirectBackend) JLog.w("Aviso: modo sem Home Assistant direto")
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 JLog.w("Aviso sem a voz do servidor; usando a voz local", e)
             }
             val f = file
@@ -900,7 +912,7 @@ class JarvisForegroundService : Service() {
         if (mode == Mode.SLEEPING || mode == Mode.LISTENING) return
         mode = Mode.IDLE
         main.postDelayed({
-            if (mode == Mode.IDLE && pendingAnnouncements.isNotEmpty()) announce(pendingAnnouncements.removeFirst())
+            if (mode == Mode.IDLE && pendingAnnouncements.isNotEmpty()) pendingAnnouncements.removeFirst().let { announce(it.first, it.second) }
         }, 1200)
         val hint = when {
             !prefs.isConfigured -> "Toque na engrenagem para configurar"
@@ -948,7 +960,7 @@ class JarvisForegroundService : Service() {
         return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Jarvis Home")
-            .setContentText(if (sleeping) "Em repouso: microfone desligado" else "Aguardando “Jarvis” (detecção no próprio aparelho)")
+            .setContentText(if (sleeping) "Em repouso: microfone desligado" else "Aguardando “" + br.com.jarvishome.wakeword.WakeWords.active(prefs).display + "”")
             .setOngoing(true)
             .setContentIntent(open)
             .addAction(Notification.Action.Builder(null, if (sleeping) "Ativar" else "Repousar", toggle).build())
@@ -980,6 +992,7 @@ class JarvisForegroundService : Service() {
         const val ACTION_WAKE = "br.com.jarvishome.WAKE"
         const val ACTION_TOGGLE_SLEEP = "br.com.jarvishome.TOGGLE_SLEEP"
         const val ACTION_RELOAD = "br.com.jarvishome.RELOAD"
+        const val ACTION_TEST_VOICE = "br.com.jarvishome.TEST_VOICE"
         const val ACTION_STOP = "br.com.jarvishome.STOP"
         const val ACTION_PAUSE_MIC = "br.com.jarvishome.PAUSE_MIC"
         const val ACTION_RESUME_MIC = "br.com.jarvishome.RESUME_MIC"

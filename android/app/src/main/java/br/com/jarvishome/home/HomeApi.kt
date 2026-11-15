@@ -61,7 +61,12 @@ class HomeApi(baseUrl: String, private val token: String) : CalendarApi {
         request("POST", "/api/services/$domain/$service", data, 10000)
     }
 
-    fun toggle(entityId: String) = callService("homeassistant", "toggle", JSONObject().put("entity_id", entityId))
+    /** Liga/desliga luzes. Sempre explícito (nunca "toggle"): tela, planta e voz usam este. */
+    fun setPower(ids: List<String>, on: Boolean) {
+        val arr = JSONArray()
+        ids.forEach { arr.put(it) }
+        callService("homeassistant", if (on) "turn_on" else "turn_off", JSONObject().put("entity_id", arr))
+    }
 
     fun setText(entityId: String, value: String) =
         callService("input_text", "set_value", JSONObject().put("entity_id", entityId).put("value", value))

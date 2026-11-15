@@ -432,11 +432,9 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         val action = fromSpoken
             ?: (if (text != spoken) LightCommands.resolve(text, lights, backend.trained) else null)
             ?: return false
-        val ids = JSONArray()
-        for (l in action.lights) ids.put(l.entityId)
+        val ids = action.lights.map { it.entityId }
         val ok = try {
-            HomeApi(backend.base, backend.token).callService("homeassistant",
-                if (action.on) "turn_on" else "turn_off", JSONObject().put("entity_id", ids))
+            HomeApi(backend.base, backend.token).setPower(ids, action.on)
             true
         } catch (e: Exception) {
             JLog.w("Falha ao acionar a luz", e)
@@ -450,7 +448,7 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             .put("local", label + if (action.how == "treino") " (treino)" else ""))
         onEvent(JSONObject().put("type", "response").put("text", speech)
             .put("response_type", if (ok) "action_done" else "error").put("continue_conversation", false))
-        if (ok) LightCommands.onChange?.invoke()
+        if (ok) LightCommands.onSet?.invoke(ids, action.on)
         // deu certo só depois da correção: a frase como foi ouvida passa a valer para essa luz
         if (ok && fromSpoken == null && (action.all || action.lights.size == 1)) {
             try {

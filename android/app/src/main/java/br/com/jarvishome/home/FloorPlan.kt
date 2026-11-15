@@ -72,8 +72,7 @@ object FloorPlan {
 
     class Relay(val entityId: String, val name: String, val on: Boolean, val available: Boolean)
 
-    private fun norm(s: String) = Normalizer.normalize(s.lowercase(), Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "").replace(Regex("[_.]"), " ")
+    private fun norm(s: String) = br.com.jarvishome.network.TextCorrector.normalize(s)
 
     /** Acha a luz de cada cômodo pelo nome (cada relé vai para um cômodo só). */
     fun autoMatch(relays: List<Relay>): Map<String, List<String>> {
