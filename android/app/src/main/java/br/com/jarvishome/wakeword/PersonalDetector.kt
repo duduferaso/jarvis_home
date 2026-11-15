@@ -184,15 +184,15 @@ object Dtw {
 /** Exemplos de voz + limiar. Formato binário simples, versionado. */
 class TemplateSet(val templates: MutableList<Array<FloatArray>>, var threshold: Float) {
 
-    class Score(val distance: Float, val endFrame: Int)
+    class Score(val distance: Float, val endFrame: Int, val index: Int = -1)
 
     /** Menor distância de [features] a qualquer exemplo (encaixe no começo do trecho). */
-    fun score(features: Array<FloatArray>, exclude: Int = -1): Score {
+    fun score(features: Array<FloatArray>, exclude: Int = -1, from: Int = 0, to: Int = templates.size): Score {
         var best = Score(Float.MAX_VALUE, 0)
-        templates.forEachIndexed { i, t ->
-            if (i == exclude) return@forEachIndexed
-            val m = Dtw.prefix(t, features)
-            if (m.distance < best.distance) best = Score(m.distance, m.endFrame)
+        for (i in from until minOf(to, templates.size)) {
+            if (i == exclude) continue
+            val m = Dtw.prefix(templates[i], features)
+            if (m.distance < best.distance) best = Score(m.distance, m.endFrame, i)
         }
         return best
     }

@@ -146,6 +146,9 @@ class Prefs(context: Context) {
     var learnFromSuccess: Boolean
         get() = sp.getBoolean("learn_from_success", true)
         set(v) = sp.edit().putBoolean("learn_from_success", v).apply()
+    var learnedResetV2: Boolean
+        get() = sp.getBoolean("learned_reset_v2", false)
+        set(v) = sp.edit().putBoolean("learned_reset_v2", v).apply()
     /** Correções aprendidas (JSON). */
     var learnedFixes: String
         get() = sp.getString("learned_fixes", "[]") ?: "[]"

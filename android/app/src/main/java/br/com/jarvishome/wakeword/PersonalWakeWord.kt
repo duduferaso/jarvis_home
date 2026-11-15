@@ -17,7 +17,9 @@ import kotlin.math.min
  *    depois do fim da fala (comando falado após uma pausa).
  * Tudo no aparelho; nenhum áudio sai antes de uma detecção.
  */
-class PersonalWakeWord(context: Context, private val set: TemplateSet) {
+class PersonalWakeWord(context: Context, private val set: TemplateSet,
+                       /** Os primeiros exemplos são os treinados por vocês; depois vêm os aprendidos no uso. */
+                       private val trainedCount: Int = set.templates.size) {
 
     class Trigger(
         val distance: Float,
@@ -28,7 +30,9 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
         /** A pessoa já começou o comando depois de uma pausa curta (não tocar o bipe por cima). */
         val speechAfter: Boolean,
         /** Esta chamada como exemplo novo, se o comando der certo (reforço). */
-        val learnFrames: Array<FloatArray>? = null
+        val learnFrames: Array<FloatArray>? = null,
+        /** Se ativou só por um exemplo aprendido: qual (para esquecer se tiver sido à toa). */
+        val viaLearned: Array<FloatArray>? = null
     ) {
         /** "Hey Tony, liga a luz" numa frase só: o comando já está no áudio. */
         val oneBreath: Boolean get() = command.size > ONE_BREATH_MIN
@@ -99,7 +103,11 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
             val pre = range(segStart - PREROLL, segStart)
             val crop = pre + samples.copyOf(min(samples.size, CROP))
             val feats = VoiceFeatures.compute(crop)
-            val score = set.score(feats.frames)
+            // treinados por vocês: limiar normal; aprendidos no uso: mais exigentes (evita ativar sozinho)
+            val trained = set.score(feats.frames, to = trainedCount)
+            val learned = if (set.templates.size > trainedCount) set.score(feats.frames, from = trainedCount) else null
+            val viaLearned = trained.distance > set.threshold && learned != null && learned.distance <= set.threshold * LEARNED_STRICT
+            val score = if (viaLearned) learned!! else trained
             lastDistance = score.distance
             // registro para entender quando a chamada não pega (ex.: TV falando junto)
             val secs = samples.size / 16000f
@@ -110,20 +118,23 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
                 JLog.i(String.format(java.util.Locale.US, "Chamada não reconhecida: distância %.3f (limiar %.3f), fala de %.1f s%s",
                     score.distance, set.threshold, secs, if (secs > 3f) " — fala longa: barulho/TV junto?" else ""))
             }
-            if (score.distance <= set.threshold) {
+            if (score.distance <= set.threshold && (viaLearned || score === trained)) {
                 val endFrame = if (score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
                 val wakeEndInSeg = max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)
                 val command = if (wakeEndInSeg < samples.size) samples.copyOfRange(wakeEndInSeg, samples.size) else FloatArray(0)
                 val after = range(segStart + samples.size, total)
                 // só a parte do "Hey Tony" (até onde encaixou no exemplo), recalculada sozinha
                 val learn = try {
-                    if (endFrame > 0 && score.distance > set.threshold * 0.3f) {
+                    // só aprende chamadas claras, pegas pelos exemplos de vocês (não por um aprendido)
+                    if (!viaLearned && endFrame > 0 && score.distance > set.threshold * 0.3f &&
+                        score.distance <= set.threshold * 0.9f) {
                         val endSample = min(crop.size, endFrame * VoiceFeatures.HOP + 1600)
                         VoiceFeatures.compute(crop.copyOf(endSample)).frames.takeIf { it.size >= 15 }
                     } else null
                 } catch (e: Exception) { null }
                 trigger = Trigger(score.distance, command, after, pre.copyOfRange(maxOf(0, pre.size - 1600), pre.size) + samples,
-                    peakDb(after) > peakDb(samples) - 20.0, learn)
+                    peakDb(after) > peakDb(samples) - 20.0, learn,
+                    if (viaLearned) set.templates[score.index] else null)
             }
         }
         return trigger
@@ -157,6 +168,7 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet) {
         private const val CROP = 35200              // 2,2 s analisados
         private const val MIN_SEGMENT = 5600        // 0,35 s
         private const val ONE_BREATH_MIN = 8000     // 0,5 s de fala depois da chamada
+        private const val LEARNED_STRICT = 0.85f    // exemplo aprendido precisa ser 15% mais parecido
     }
 }
 
@@ -196,7 +208,7 @@ object PersonalStore {
     // ------------------------------------------------------------ aprendidos (reforço)
 
     private const val LEARNED = "personal/aprendidos.tpl"
-    const val MAX_LEARNED = 15
+    const val MAX_LEARNED = 10
 
     fun loadLearned(context: Context): MutableList<Array<FloatArray>> = try {
         val f = File(context.filesDir, LEARNED)

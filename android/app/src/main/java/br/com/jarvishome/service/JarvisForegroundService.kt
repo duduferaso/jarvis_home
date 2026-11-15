@@ -65,6 +65,8 @@ class JarvisForegroundService : Service() {
     // ---------------------------------------------------------------- reforço (aprendizado)
     /** A chamada que abriu a conversa atual (vira exemplo se o comando der certo). */
     @Volatile private var learnCandidate: Array<FloatArray>? = null
+    /** Se a ativação veio só de um exemplo aprendido: ele (para esquecer se foi à toa). */
+    @Volatile private var activatedByLearned: Array<FloatArray>? = null
     private class Learned(val kind: String, val at: Long, val what: String, val undo: () -> Unit)
     private val learnedStack = ArrayDeque<Learned>()
 
@@ -115,6 +117,22 @@ class JarvisForegroundService : Service() {
                 }
             }
         }
+    }
+
+    private fun code0(c: String?) = c ?: ""
+
+    /** Ativou à toa por causa de um exemplo aprendido: tira ele. */
+    private fun forgetLearned(t: Array<FloatArray>) {
+        personal?.forget(t)
+        Thread {
+            try {
+                val l = PersonalStore.loadLearned(this)
+                val n = l.size
+                l.removeAll { it.size == t.size && it.contentDeepEquals(t) }
+                if (l.size < n) PersonalStore.saveLearned(this, l)
+                JLog.i("Ativou sem comando por um exemplo aprendido: esqueci esse exemplo (restam ${l.size})")
+            } catch (e: Exception) { JLog.w("Não consegui esquecer o exemplo", e) }
+        }.start()
     }
 
     /** O comando deu certo: a chamada que abriu a conversa vira mais um exemplo de voz. */
@@ -444,6 +462,7 @@ class JarvisForegroundService : Service() {
                     if (manualTrigger) {
                         manualTrigger = false
                         learnCandidate = null
+                        activatedByLearned = null
                         trigger = "toque"
                     }
                     if (trigger != null) beginListening(trigger, lastBytes)
@@ -478,9 +497,16 @@ class JarvisForegroundService : Service() {
         if (prefs.personalDetector) {
             try {
                 StateBus.wakeWordStatus = "Carregando detector pessoal…"
+                if (!prefs.learnedResetV2) {
+                    // 1.12.0 aprendia demais (inclusive ativações da TV): recomeça com regras mais rígidas
+                    PersonalStore.clearLearned(this)
+                    prefs.learnedResetV2 = true
+                    JLog.i("Chamadas aprendidas na 1.12.0 descartadas (regras novas, mais rígidas)")
+                }
+                val trainedCount = PersonalStore.load(this).templates.size
                 val set = PersonalStore.loadForDetection(this)
-                val learned = PersonalStore.loadLearned(this).size
-                personal = PersonalWakeWord(this, set)
+                val learned = set.templates.size - trainedCount
+                personal = PersonalWakeWord(this, set, trainedCount)
                 wakeOk = true
                 StateBus.wakeWordStatus = "Pessoal · " + set.templates.size + " exemplos" +
                     (if (learned > 0) " ($learned aprendidos no uso)" else "") +
@@ -512,6 +538,7 @@ class JarvisForegroundService : Service() {
     /** Detector pessoal: comando falado de uma vez já vem no áudio; com pausa, abre o microfone. */
     private fun beginPersonal(hit: PersonalWakeWord.Trigger) {
         learnCandidate = hit.learnFrames
+        activatedByLearned = hit.viaLearned
         val audio = if (hit.oneBreath) hit.whole + hit.afterSegment else hit.afterSegment
         val pcm = if (audio.isNotEmpty()) floatsToBytes(audio) else null
         beginListening(
@@ -620,12 +647,16 @@ class JarvisForegroundService : Service() {
                 else -> "sem resposta"
             }, local))
 
-        // reforço: a casa entendeu e respondeu → a chamada era de verdade
+        // reforço: só um comando EXECUTADO confirma que a chamada era de verdade
         val candidate = learnCandidate
         learnCandidate = null
-        if (candidate != null && prefs.learnFromSuccess && errCode == null &&
-            (responseType == "action_done" || responseType == "query_answer") && local != "aprendizado") {
-            learnWake(candidate)
+        val byLearned = activatedByLearned
+        activatedByLearned = null
+        val executed = errCode == null && responseType == "action_done" && local != "aprendizado"
+        if (candidate != null && prefs.learnFromSuccess && executed) learnWake(candidate)
+        // reforço negativo: ativou por um exemplo aprendido e não virou comando → esquece esse exemplo
+        if (byLearned != null && !executed && responseType != "query_answer" && code0(errCode) != "only-wake-word") {
+            forgetLearned(byLearned)
         }
 
         val code = errCode
