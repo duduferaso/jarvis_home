@@ -16,7 +16,9 @@ import java.util.Locale
  * exercício na execução, "Descanso. Próximo: …" no descanso, metade e fim do treino.
  * Usa a voz do próprio Android (instantânea, sem rede).
  */
-class WorkoutCoach(context: Context) {
+class WorkoutCoach(context: Context,
+                   /** Fala com a mesma voz do Jarvis (Home Assistant); null = voz do Android. */
+                   private val speaker: ((String) -> Unit)? = null) {
     private val main = Handler(Looper.getMainLooper())
     private var tone: ToneGenerator? = null
     private var tts: TextToSpeech? = null
@@ -58,7 +60,30 @@ class WorkoutCoach(context: Context) {
     }
 
     private fun say(text: String) {
-        if (ttsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "treino")
+        val sp = speaker
+        if (sp != null) sp(text)
+        else if (ttsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "treino")
+    }
+
+    companion object {
+        /** Todas as frases que o treino pode falar (para gerar a voz antes de começar). */
+        fun phrases(p: Workout.Plan): List<String> {
+            val out = LinkedHashSet<String>()
+            val n = p.perSeries
+            val laps = p.seriesCount
+            out.add("Descanso.")
+            out.add("Último exercício!")
+            out.add("Treino concluído! ${p.rounds} rodadas. Mandou bem!")
+            if (n > 0) {
+                for (lap in 1..laps) {
+                    out.add(if (lap == laps && laps > 1) "Última série! Exercício 1." else "Série $lap de $laps. Exercício 1.")
+                    out.add("Fim da série $lap. Descanso.")
+                }
+                for (k in 2..n) out.add(if (p.exercises.isNotEmpty()) p.exercises[k - 1] + "." else "Exercício $k.")
+                if (p.exercises.isNotEmpty()) out.add(p.exercises[0] + ".")
+            } else for (r in 1..p.rounds) out.add("Rodada $r.")
+            return out.toList()
+        }
     }
 
     private fun step() {

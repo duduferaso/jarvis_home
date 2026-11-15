@@ -186,6 +186,47 @@ class JarvisForegroundService : Service() {
     private lateinit var player: AudioPlayer
     private val main = Handler(Looper.getMainLooper())
     private val beeper = AlarmBeeper()
+
+    // ---------------------------------------------------------------- voz única
+    /** Gera a voz do Home Assistant (Piper) em segundo plano, sem atrapalhar as conversas. */
+    private val voiceExecutor = Executors.newSingleThreadExecutor()
+    private val voiceCache = java.util.Collections.synchronizedMap(LinkedHashMap<String, File>())
+
+    /** Áudio desta frase na voz do Home Assistant (guardado para repetir sem gerar de novo), ou null. */
+    private fun voiceFile(text: String): File? {
+        voiceCache[text]?.takeIf { it.exists() }?.let { return it }
+        val backend = Backends.create(prefs) as? HaDirectBackend ?: return null
+        val url = backend.synthesize(text) ?: return null
+        val dir = File(cacheDir, "voz").apply { mkdirs() }
+        val f = File(dir, Integer.toHexString(text.hashCode()) + "-" + text.length + ".audio")
+        backend.download(url, f)
+        voiceCache[text] = f
+        if (voiceCache.size > 150) voiceCache.keys.firstOrNull()?.let { voiceCache.remove(it)?.delete() }
+        return f
+    }
+
+    /**
+     * Fala SEMPRE com a voz do Jarvis (a do Home Assistant). A voz do Android só entra se a casa
+     * estiver fora do alcance, e isso fica registrado nos logs.
+     */
+    private fun speakHa(text: String, onDone: () -> Unit) {
+        voiceExecutor.execute {
+            val f = try { voiceFile(text) } catch (e: Exception) { JLog.w("Voz do Home Assistant falhou", e); null }
+            main.post {
+                if (f != null) player.play(f, prefs.volume / 100f, onStart = {}, onDone = { ok ->
+                    if (ok) onDone() else { JLog.w("Áudio não tocou; usando a voz do Android"); player.speakLocal(text) { onDone() } }
+                })
+                else { JLog.w("Sem a voz do Home Assistant; usando a voz do Android: “$text”"); player.speakLocal(text) { onDone() } }
+            }
+        }
+    }
+
+    /** Frase do treino: toca na hora se já foi gerada; senão gera e toca. */
+    private fun cue(text: String) {
+        val cached = voiceCache[text]?.takeIf { it.exists() }
+        if (cached != null) { player.play(cached, prefs.volume / 100f, onStart = {}, onDone = {}); return }
+        speakHa(text) {}
+    }
     private var coach: WorkoutCoach? = null
 
     /** Timers e alarmes: confere a cada segundo; toca até alguém parar (voz, toque na tela) ou por 3 min. */
@@ -245,8 +286,14 @@ class JarvisForegroundService : Service() {
         Timers.restore(prefs.timers)
         Timers.onChange = { prefs.timers = Timers.encode() }
         main.post(timerLoop)
-        coach = WorkoutCoach(this)
-        br.com.jarvishome.commands.Workout.onChange = { main.post { coach?.kick() } }
+        coach = WorkoutCoach(this) { text -> cue(text) }
+        br.com.jarvishome.commands.Workout.onChange = {
+            main.post { coach?.kick() }
+            // gera a voz das frases do treino antes de precisar (mesma voz do Jarvis, sem atraso)
+            br.com.jarvishome.commands.Workout.plan?.let { p ->
+                voiceExecutor.execute { WorkoutCoach.phrases(p).forEach { try { voiceFile(it) } catch (_: Exception) {} } }
+            }
+        }
         br.com.jarvishome.commands.Workout.onOpenScreen = {
             main.post {
                 try {
@@ -307,6 +354,7 @@ class JarvisForegroundService : Service() {
         coach?.release()
         player.release()
         sessionExecutor.shutdownNow()
+        voiceExecutor.shutdownNow()
         healthExecutor.shutdownNow()
         wakeLock?.let { if (it.isHeld) it.release() }
         StateBus.serviceRunning = false
@@ -730,9 +778,9 @@ class JarvisForegroundService : Service() {
                     } else afterResponse(outcome, cont)
                 })
             text.isNotEmpty() -> {
-                JLog.w("Resposta sem áudio do servidor; usando voz local")
+                JLog.w("Resposta veio sem áudio; gerando com a voz do Home Assistant")
                 StateBus.setState(AssistantState.SPEAKING, text)
-                player.speakLocal(text) { afterResponse(outcome, cont) }
+                speakHa(text) { afterResponse(outcome, cont) }
             }
             else -> afterResponse(AssistantState.CONFUSED, false)
         }
@@ -794,7 +842,9 @@ class JarvisForegroundService : Service() {
         main.post {
             StateBus.setState(state, display)
             val s = speech
-            if (s != null) player.speakLocal(s) { main.postDelayed({ goIdle() }, 1200) }
+            // sem conexão a casa não fala: só aí a voz do Android
+            if (s != null && code == "network") player.speakLocal(s) { main.postDelayed({ goIdle() }, 1200) }
+            else if (s != null) speakHa(s) { main.postDelayed({ goIdle() }, 1200) }
             else main.postDelayed({ goIdle() }, 3000)
         }
     }
@@ -817,15 +867,11 @@ class JarvisForegroundService : Service() {
         StateBus.setState(AssistantState.SPEAKING, text)
         player.beep(prefs.beep)
         val backend = Backends.create(prefs)
-        sessionExecutor.execute {
+        voiceExecutor.execute {
             var file: File? = null
             try {
-                val url = (backend as? HaDirectBackend)?.synthesize(text)
-                if (url != null) {
-                    val f = File(cacheDir, "aviso.audio")
-                    backend.download(url, f)
-                    file = f
-                }
+                file = voiceFile(text)
+                if (file == null && backend !is HaDirectBackend) JLog.w("Aviso: modo sem Home Assistant direto")
             } catch (e: Exception) {
                 JLog.w("Aviso sem a voz do servidor; usando a voz local", e)
             }
