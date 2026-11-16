@@ -37,8 +37,6 @@ import br.com.jarvishome.network.Session
 import br.com.jarvishome.settings.Prefs
 import br.com.jarvishome.settings.Provisioning
 import br.com.jarvishome.ui.MainActivity
-import br.com.jarvishome.wakeword.SherpaWakeWord
-import br.com.jarvishome.wakeword.WakeWordEngine
 import br.com.jarvishome.wakeword.WakeWords
 import br.com.jarvishome.wakeword.PersonalStore
 import br.com.jarvishome.wakeword.PersonalWakeWord
@@ -254,7 +252,6 @@ class JarvisForegroundService : Service() {
     private val vad = VoiceActivityDetector(900)
     private val lock = Any()
     private var audioThread: Thread? = null
-    private var wake: WakeWordEngine? = null
     private var personal: PersonalWakeWord? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var sessionExecutor: ExecutorService
@@ -474,9 +471,7 @@ class JarvisForegroundService : Service() {
                 rec?.release()
             }
         }
-        try { wake?.release() } catch (_: Throwable) {}
         try { personal?.release() } catch (_: Throwable) {}
-        wake = null
         personal = null
         reloadWake = true
         JLog.i("Microfone fechado")
@@ -506,7 +501,6 @@ class JarvisForegroundService : Service() {
                     vad.learnNoise(rms)
                     if (resetWake) {
                         resetWake = false
-                        try { wake?.reset() } catch (_: Exception) {}
                         try { personal?.reset() } catch (_: Exception) {}
                     }
                     var trigger: String? = null
@@ -521,15 +515,6 @@ class JarvisForegroundService : Service() {
                             beginPersonal(hit)
                             lastBytes = bytes
                             continue
-                        }
-                    }
-                    val w = wake
-                    if (w != null) {
-                        for (i in 0 until n) floats[i] = frame[i] / 32768f
-                        val kw = w.accept(if (n == floats.size) floats else floats.copyOf(n))
-                        if (kw != null && System.currentTimeMillis() >= cooldownUntil) {
-                            trigger = kw
-                            StateBus.lastWakeWord = kw + " às " + timeFmt.format(Date())
                         }
                     }
                     if (manualTrigger) {
@@ -558,9 +543,7 @@ class JarvisForegroundService : Service() {
 
     private fun initWakeWord() {
         reloadWake = false
-        try { wake?.release() } catch (_: Throwable) {}
         try { personal?.release() } catch (_: Throwable) {}
-        wake = null
         personal = null
         wakeOk = false
         if (!prefs.wakeWordEnabled) {
@@ -568,7 +551,7 @@ class JarvisForegroundService : Service() {
             if (mode == Mode.IDLE) goIdle()
             return
         }
-        if (prefs.personalDetector) {
+        run {
             try {
                 StateBus.wakeWordStatus = "Carregando detector pessoal…"
                 if (!prefs.learnedResetV2) {
@@ -591,18 +574,6 @@ class JarvisForegroundService : Service() {
                 JLog.e("Detector pessoal não inicializou", t)
                 StateBus.wakeWordStatus = "Pessoal falhou: " + (t.message ?: t.javaClass.simpleName)
             }
-            if (mode == Mode.IDLE) goIdle()
-            return
-        }
-        try {
-            StateBus.wakeWordStatus = "Carregando modelo…"
-            wake = SherpaWakeWord(this, prefs.keywords, prefs.wakeThreshold, prefs.keywordBoost)
-            wakeOk = true
-            StateBus.wakeWordStatus = "“" + WakeWords.current(prefs).display + "” · sensibilidade " + prefs.sensitivity +
-                " · reforço " + String.format(Locale.US, "%.1f", prefs.keywordBoost)
-        } catch (t: Throwable) {
-            JLog.e("Wake word não inicializou", t)
-            StateBus.wakeWordStatus = "Falhou: " + (t.message ?: t.javaClass.simpleName)
         }
         if (mode == Mode.IDLE) goIdle()
     }
@@ -932,10 +903,7 @@ class JarvisForegroundService : Service() {
         val hint = when {
             !prefs.isConfigured -> "Toque na engrenagem para configurar"
             !running -> "Microfone desligado"
-            wakeOk && prefs.personalDetector -> "Diga “" + PersonalStore.PHRASE + "” para começar"
-            wakeOk && prefs.calibratedWord != prefs.wakeWordId ->
-                "Diga “" + WakeWords.current(prefs).display + "” · calibre sua voz na ⚙"
-            wakeOk -> "Diga “" + WakeWords.current(prefs).display + "” para começar"
+            wakeOk -> "Diga “" + PersonalStore.PHRASE + "” para começar"
             else -> "Toque no rosto para falar"
         }
         StateBus.setState(AssistantState.IDLE, hint)

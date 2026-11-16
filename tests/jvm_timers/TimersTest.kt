@@ -63,6 +63,8 @@ fun main() {
     val saved = Timers.encode(); Timers.clear(); Timers.restore(saved)
     ok(Timers.all().size == 1 && Timers.all()[0].label == "arroz", "salva e recarrega a lista")
     ok(Timers.handle("cancela o timer do arroz", NOW, base)?.speech == "Timer arroz cancelado.", "cancela: ${Timers.all().size}")
+    ok(p("alarme para as 6h30") is Cmd.SetAlarm && (p("alarme para as 6h30") as Cmd.SetAlarm).at.toLocalTime().minute == 30, "\"alarme para as 6h30\" é horário, não 6 h 30 de duração: ${p("alarme para as 6h30")}")
+    ok((p("me acorda às 7") as? Cmd.SetAlarm)?.at?.hour == 7, "\"me acorda às 7\" é de manhã: ${p("me acorda às 7")}")
     ok(Timers.clock(272) == "04:32" && Timers.clock(3725) == "1:02:05", "relógio da tela")
     println(if (fl == 0) "TODOS PASSARAM" else "$fl FALHARAM"); if (fl > 0) System.exit(1)
 }

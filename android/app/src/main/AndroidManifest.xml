@@ -48,11 +48,6 @@
             </intent-filter>
         </activity-alias>
 
-        <activity
-            android:name=".ui.CalibrationActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            android:theme="@style/JarvisTheme.Fullscreen" />
 
         <activity
             android:name=".ui.VoiceTrainingActivity"

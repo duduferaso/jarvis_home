@@ -38,33 +38,9 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("wake_enabled", v).apply()
 
     /** 1 (menos falsos positivos) … 10 (aciona com mais facilidade). */
-    var sensitivity: Int
-        get() = sp.getInt("sensitivity", 8)
-        set(v) = sp.edit().putInt("sensitivity", v.coerceIn(1, 10)).apply()
 
-    /** Detector pessoal (comparação com exemplos de voz da casa) em vez do modelo em inglês. */
-    var personalDetector: Boolean
-        get() = sp.getBoolean("personal_detector", true)
-        set(v) = sp.edit().putBoolean("personal_detector", v).apply()
-
-    /** Palavra de ativação escolhida (ver WakeWords). */
-    var wakeWordId: String
-        get() = sp.getString("wake_word_id", "jarvis") ?: "jarvis"
-        set(v) = sp.edit().putString("wake_word_id", v).apply()
-
-    /** Palavra para a qual a última calibração foi salva ("" = não calibrado). */
-    var calibratedWord: String
-        get() = sp.getString("calibrated_word", "") ?: ""
-        set(v) = sp.edit().putString("calibrated_word", v).apply()
-
-    var keywords: String
-        get() = sp.getString("keywords", DEFAULT_KEYWORDS) ?: DEFAULT_KEYWORDS
-        set(v) = sp.edit().putString("keywords", v.trim().ifEmpty { DEFAULT_KEYWORDS }).apply()
-
-    /** Reforço das palavras-chave no detector (1,5 padrão; a calibração pode subir para 3,0). */
-    var keywordBoost: Float
-        get() = sp.getFloat("keyword_boost", 1.5f)
-        set(v) = sp.edit().putFloat("keyword_boost", v.coerceIn(0.5f, 5f)).apply()
+    /** A chamada é sempre pelo detector pessoal (o modelo em inglês saiu na 1.14.0). */
+    val personalDetector: Boolean get() = true
 
     /** Corrige a transcrição com os nomes da casa ("zoquart" → "quarto"). */
     var correctText: Boolean
@@ -252,25 +228,8 @@ class Prefs(context: Context) {
 
     val isConfigured: Boolean get() = serverUrl.isNotEmpty() && token.isNotEmpty()
 
-    /** Sensibilidade 1..10 → limiar do detector 0,40..0,08 (menor = mais sensível). */
-    val wakeThreshold: Float get() = thresholdFor(sensitivity)
 
     companion object {
-        /**
-         * "Jarvis" em tokens BPE do modelo gigaspeech (gerados com sentencepiece a partir do
-         * bpe.model do próprio modelo). O modelo é treinado em inglês, então a pronúncia
-         * brasileira precisa de variações: calibre com a SUA voz usando
-         * tools/calibrar_wakeword.py. Formato sherpa-onnx, uma por linha:  TOKENS @RÓTULO
-         */
-        const val DEFAULT_KEYWORDS = "▁JA R VI S @JARVIS\n" +
-            "▁JA VI S @JAVIS\n" +
-            "▁JO VI S @JOVIS\n" +
-            "▁JA R VE S @JARVES\n" +
-            "▁JA R ▁VI S @JAR_VIS\n" +
-            "▁SHA R VI S @SHARVIS"
-
-        fun thresholdFor(sensitivity: Int): Float = 0.40f - (sensitivity - 1) * (0.32f / 9f)
-
         const val DEFAULT_URL = "http://192.168.18.108:8123"
 
         /** Vocabulário dos comandos já existentes na casa (levantado pelo Claude Code via API). */

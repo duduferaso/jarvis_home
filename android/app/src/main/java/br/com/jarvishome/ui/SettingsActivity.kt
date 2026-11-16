@@ -35,7 +35,6 @@ import br.com.jarvishome.network.Backends
 import br.com.jarvishome.network.HaDirectBackend
 import br.com.jarvishome.service.JarvisForegroundService
 import br.com.jarvishome.settings.Prefs
-import br.com.jarvishome.wakeword.WakeWords
 import br.com.jarvishome.wakeword.PersonalStore
 import br.com.jarvishome.home.HomeApi
 import br.com.jarvishome.home.HomeModel
@@ -64,14 +63,12 @@ class SettingsActivity : Activity() {
     private lateinit var repoField: EditText
     private lateinit var ghTokenField: EditText
     private lateinit var swAutoUpdate: Switch
-    private lateinit var keywordsField: EditText
     private lateinit var connResult: TextView
     private lateinit var diag: TextView
     private lateinit var micBar: ProgressBar
 
     private lateinit var swDirect: Switch
     private lateinit var swEnabled: Switch
-    private lateinit var swPersonal: Switch
     private var personalThreshold = 0.22f
     private lateinit var swCorrect: Switch
     private lateinit var swLocalLights: Switch
@@ -98,7 +95,6 @@ class SettingsActivity : Activity() {
     private var nightStart = 23
     private var nightEnd = 6
     private var tempLimit = 75
-    private var sensitivity = 6
     private var silenceMs = 900
     private var volume = 90
 
@@ -108,7 +104,6 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        sensitivity = prefs.sensitivity
         silenceMs = prefs.silenceMs
         volume = prefs.volume
         val root = LinearLayout(this).apply {
@@ -172,9 +167,8 @@ class SettingsActivity : Activity() {
         private val SECTION_TAB = mapOf(
             "Home Assistant (rede local)" to "Conexão",
             "Assistente" to "Voz",
-            "Chamada por voz: detector pessoal (recomendado)" to "Voz",
-            "Chamada por voz: modelo em inglês (alternativo)" to "Voz",
-            "Avançado: variações da palavra" to "Voz",
+            "Chamada por voz: “Hey Tony”" to "Voz",
+            "Escuta e resposta" to "Voz",
             "Aprendizado (reforço)" to "Voz",
             "Comandos de luz" to "Comandos",
             "Entender melhor os comandos" to "Comandos",
@@ -368,8 +362,7 @@ class SettingsActivity : Activity() {
         swEnabled = switch("Assistente ativo (desligado = microfone fechado)", prefs.assistantEnabled)
         swWake = switch("Ativar por voz", prefs.wakeWordEnabled)
 
-        section("Chamada por voz: detector pessoal (recomendado)")
-        swPersonal = switch("Reconhecer “" + PersonalStore.PHRASE + "” pela voz da casa", prefs.personalDetector)
+        section("Chamada por voz: “Hey Tony”")
         val personalInfo = note("")
         val personalSet = PersonalStore.load(this)
         personalThreshold = personalSet.threshold
@@ -433,38 +426,7 @@ class SettingsActivity : Activity() {
             }
         }
 
-        section("Chamada por voz: modelo em inglês (alternativo)")
-        note((if (prefs.personalDetector) "⚠ Desativado agora: o detector pessoal acima está ligado, então esta calibração não muda nada. " +
-            "Para ensinar a sua voz, use “Treinar a minha voz” acima. " else "") +
-            "Usado só com o detector pessoal desligado. Nos testes com a voz de vocês, reconheceu no máximo 2 de 13 chamadas.")
-        val wordLabel = note("")
-        fun refreshWord() {
-            val p = WakeWords.current(prefs)
-            wordLabel.text = "Palavra: “" + p.display + "”  ·  " +
-                (if (prefs.calibratedWord == p.id) "calibrada para a sua voz ✓" else "ainda não calibrada")
-        }
-        refreshWord()
-        button("Calibrar o modelo em inglês") {
-            save()
-            startActivity(Intent(this, CalibrationActivity::class.java))
-            finish()
-        }
-        button("Trocar palavra de ativação") {
-            val all = WakeWords.ALL
-            AlertDialog.Builder(this)
-                .setTitle("Palavra de ativação")
-                .setItems(all.map { it.display + "  —  " + it.note }.toTypedArray()) { _, which ->
-                    WakeWords.select(prefs, all[which])
-                    keywordsField.setText(prefs.keywords)
-                    refreshWord()
-                    Toast.makeText(this, "Agora calibre a sua voz para “" + all[which].display + "”", Toast.LENGTH_LONG).show()
-                }
-                .show()
-        }
-        slider("Sensibilidade do wake word", 1, 10, 1, sensitivity,
-            { v -> v.toString() + "  (limiar " + String.format(Locale.US, "%.2f", Prefs.thresholdFor(v)) + ")" }) { sensitivity = it }
-        note("Se aciona sozinho com TV ou conversa, diminua. Se não reconhece você, aumente. " +
-            "Depois de calibrar, cada variação já tem a sensibilidade ideal para a sua voz e este ajuste não se aplica a ela.")
+        section("Escuta e resposta")
         slider("Silêncio para encerrar o comando", 400, 2500, 100, silenceMs, { v -> "$v ms" }) { silenceMs = it }
         slider("Volume da resposta", 0, 100, 5, volume, { v -> "$v%" }) { volume = it }
         swBeep = switch("Bipe ao começar a ouvir", prefs.beep)
@@ -663,26 +625,6 @@ class SettingsActivity : Activity() {
                 .show()
         }
 
-        section("Avançado: variações da palavra")
-        keywordsField = EditText(this).apply {
-            setText(prefs.keywords)
-            setTextColor(Color.WHITE)
-            textSize = 13f
-            typeface = Typeface.MONOSPACE
-            minLines = 4
-            gravity = Gravity.TOP
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-        }
-        form.addView(keywordsField)
-        note("Tokens BPE do modelo (formato sherpa-onnx). Grave sua voz dizendo “" + WakeWords.current(prefs).display + "” e rode " +
-            "tools/calibrar_wakeword.py no servidor: ele gera as linhas certas para colar aqui.")
-        button("Restaurar padrão da palavra") {
-            keywordsField.setText(WakeWords.current(prefs).defaultLines.joinToString("\n"))
-            prefs.keywordBoost = 1.5f
-            prefs.calibratedWord = ""
-        }
-
         val save = Button(this).apply {
             text = "Salvar"
             isAllCaps = false
@@ -710,7 +652,6 @@ class SettingsActivity : Activity() {
         prefs.terminalId = terminalField.text.toString()
         val tok = tokenField.text.toString().trim()
         if (tok.isNotEmpty()) prefs.token = tok
-        prefs.sensitivity = sensitivity
         prefs.silenceMs = silenceMs
         prefs.volume = volume
         prefs.wakeWordEnabled = swWake.isChecked
@@ -720,8 +661,6 @@ class SettingsActivity : Activity() {
         prefs.reduceMotion = swMotion.isChecked
         prefs.showClock = swClock.isChecked
         prefs.startOnBoot = swBoot.isChecked
-        prefs.keywords = keywordsField.text.toString()
-        prefs.personalDetector = swPersonal.isChecked
         val ps = PersonalStore.load(this)
         if (Math.abs(ps.threshold - personalThreshold) > 0.0005f) {
             ps.threshold = personalThreshold

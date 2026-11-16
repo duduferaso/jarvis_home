@@ -2,7 +2,6 @@ package br.com.jarvishome.network
 
 import br.com.jarvishome.domain.ConnectionState
 import br.com.jarvishome.settings.Prefs
-import br.com.jarvishome.wakeword.CalibrationAnalyzer
 import br.com.jarvishome.wakeword.WakeWords
 import org.json.JSONObject
 import java.io.File

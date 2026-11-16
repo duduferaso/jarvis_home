@@ -278,7 +278,7 @@ class VoiceTrainingActivity : Activity() {
     private fun save() {
         val set = pending ?: return
         PersonalStore.save(this, set)
-        prefs.personalDetector = true
+        // a chamada é sempre pelo detector pessoal
         prefs.wakeWordEnabled = true
         JLog.i("Exemplos de voz salvos: ${set.templates.size}")
         finish()

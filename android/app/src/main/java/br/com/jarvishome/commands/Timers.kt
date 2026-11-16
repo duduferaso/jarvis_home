@@ -248,7 +248,10 @@ object Timers {
         if (!hasWord && !avisa && !pendingAsk) return null
         if (!hasWord && avisa && Regex("\\b(as|pras|amanha|hoje|dia)\\b").containsMatchIn(joined) && !acorda) return null // "me lembra amanhã às 9" é agenda
 
-        val dur = duration(t)
+        // "alarme para as 6h30" é horário, não duração de 6 h 30
+        val isAlarmWord = acorda || n.any { it == "alarme" || it == "alarmes" }
+        val atClock = isAlarmWord && Regex("\\b(as|pras|para as|meio dia|meia noite)\\b|\\d+:\\d+").containsMatchIn(joined)
+        val dur = if (atClock) null else duration(t)
         if (dur != null) {
             mark(t) { TIMER_WORDS.matches(it) || it in VERBS || it in setOf("avisa", "avise", "chama", "chame", "lembra", "lembre", "acorda", "acorde") }
             askedAt = 0
@@ -267,6 +270,7 @@ object Timers {
                     explicit24 -> listOf(w.time.hour)
                     Regex("\\b(manha|madrugada)\\b").containsMatchIn(joined) -> listOf(w.time.hour % 12)
                     Regex("\\b(tarde|noite)\\b").containsMatchIn(joined) -> listOf(w.time.hour % 12 + 12)
+                    acorda -> listOf(w.time.hour % 12) // "me acorda às 7" = de manhã
                     else -> listOf(w.time.hour % 12, w.time.hour % 12 + 12)
                 }
                 val explicitDay = Regex("\\b(hoje|amanha|depois de amanha|segunda|terca|quarta|quinta|sexta|sabado|domingo|dia \\d+)\\b").containsMatchIn(joined)
