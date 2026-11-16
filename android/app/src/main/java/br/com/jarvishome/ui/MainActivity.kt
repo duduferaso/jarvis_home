@@ -150,6 +150,7 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         row2.addView(dateView, LinearLayout.LayoutParams(0, -2, 1f))
         weatherView = text(14f, soft).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; gravity = Gravity.END }
         row2.addView(weatherView, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(10) })
+        weatherView.setOnClickListener { showForecast() } // toque no clima: previsão da semana
         top.addView(row2, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(2) })
 
         banner = text(16f, Color.WHITE).apply {
@@ -579,6 +580,35 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     }
 
     /** Toque longo num cômodo: escolher quais luzes/relés do Home Assistant ele controla. */
+    private fun showForecast() {
+        val p = prefs
+        Toast.makeText(this, "Buscando a previsão…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val lines: List<String>? = try {
+                val api = HomeApi(p.serverUrl, p.token)
+                val entity = br.com.jarvishome.home.Forecast.findEntity(api.states())
+                if (entity == null) null
+                else br.com.jarvishome.home.Forecast.lines(br.com.jarvishome.home.Forecast.fetch(api, entity), java.time.LocalDate.now())
+            } catch (t: Throwable) {
+                JLog.w("Previsão do tempo indisponível", t)
+                emptyList()
+            }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                val msg = when {
+                    lines == null -> "Não encontrei uma entidade de clima no Home Assistant."
+                    lines.isEmpty() -> "Não consegui a previsão agora."
+                    else -> lines.joinToString("\n\n")
+                }
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Previsão dos próximos dias")
+                    .setMessage(msg + "\n\nPor voz: “Hey Tony, previsão da semana”, “vai chover amanhã?”")
+                    .setPositiveButton("Fechar", null)
+                    .show()
+            }
+        }.start()
+    }
+
     private fun chooseZoneLights(z: FloorPlan.Zone) {
         val relays = HomeModel.relays.sortedBy { it.name.lowercase() }
         if (relays.isEmpty()) {

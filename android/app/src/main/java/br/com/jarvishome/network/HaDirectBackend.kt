@@ -364,6 +364,36 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 return
             }
 
+            // Previsão do tempo (hoje, amanhã, sábado, semana, "vai chover?"): o assistente do HA só sabe o "agora".
+            if (text.isNotBlank()) {
+                val today = java.time.LocalDate.now()
+                val q = br.com.jarvishome.home.Forecast.parseQuery(text, today)
+                if (q != null) {
+                    val speech = try {
+                        val api = HomeApi(backend.base, backend.token)
+                        val states = api.states()
+                        val entity = br.com.jarvishome.home.Forecast.findEntity(states)
+                        if (entity == null) "Não encontrei uma entidade de clima no Home Assistant."
+                        else {
+                            val days = if (q.ask is br.com.jarvishome.home.Forecast.Ask.Now) try {
+                                br.com.jarvishome.home.Forecast.fetch(api, entity)
+                            } catch (e: Exception) { emptyList() } else br.com.jarvishome.home.Forecast.fetch(api, entity)
+                            br.com.jarvishome.home.Forecast.answer(q, days, br.com.jarvishome.home.Forecast.nowFrom(states, entity), today)
+                        }
+                    } catch (e: Exception) {
+                        JLog.w("Previsão do tempo indisponível", e)
+                        "Não consegui a previsão do tempo agora."
+                    }
+                    JLog.i("Tempo: “$text” → “$speech”")
+                    onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "tempo"))
+                    onEvent(JSONObject().put("type", "response").put("text", speech).put("response_type", "query_answer")
+                        .put("continue_conversation", false))
+                    val url = try { HaDirectBackend.speakOn(socket, 8, backend.pipelineId, speech) } catch (e: Exception) { null }
+                    if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
+                    return
+                }
+            }
+
             // Agenda: respondida pelo próprio app (antes da correção, para manter o título como foi falado).
             if (backend.calendarEnabled && text.isNotBlank()) {
                 val answer = try {

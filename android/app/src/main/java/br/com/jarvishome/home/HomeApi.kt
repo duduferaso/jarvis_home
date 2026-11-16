@@ -61,6 +61,11 @@ class HomeApi(baseUrl: String, private val token: String) : CalendarApi {
         request("POST", "/api/services/$domain/$service", data, 10000)
     }
 
+    /** Previsão do tempo (weather.get_forecasts com resposta). type: daily | hourly | twice_daily. */
+    fun forecast(entityId: String, type: String): JSONObject =
+        JSONObject(request("POST", "/api/services/weather/get_forecasts?return_response",
+            JSONObject().put("entity_id", entityId).put("type", type), 10000))
+
     /** Liga/desliga luzes. Sempre explícito (nunca "toggle"): tela, planta e voz usam este. */
     fun setPower(ids: List<String>, on: Boolean) {
         val arr = JSONArray()

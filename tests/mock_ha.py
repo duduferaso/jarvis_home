@@ -111,6 +111,15 @@ async def service(request):
             if e not in S["lights"]:
                 return web.json_response({"message": "Entity not found"}, status=400)
             S["lights"][e] = "on" if svc == "turn_on" else "off"
+    elif (domain, svc) == ("weather", "get_forecasts"):
+        if "return_response" not in request.query:
+            return web.json_response({"message": "Service call requires responses but caller did not ask for responses"}, status=400)
+        import datetime as _dt
+        base = _dt.date.today()
+        fc = [{"condition": c, "datetime": (base + _dt.timedelta(days=i)).isoformat() + "T15:00:00+00:00",
+               "temperature": 25 + i, "templow": 18, "precipitation_probability": p}
+              for i, (c, p) in enumerate([("sunny", 0), ("rainy", 85), ("cloudy", 20), ("sunny", 5), ("sunny", 0)])]
+        return web.json_response({"changed_states": [], "service_response": {data["entity_id"]: {"forecast": fc}}})
     elif (domain, svc) == ("homeassistant", "toggle"):
         e = data["entity_id"]
         S["lights"][e] = "off" if S["lights"][e] == "on" else "on"
