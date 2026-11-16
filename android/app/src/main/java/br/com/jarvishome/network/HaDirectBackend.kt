@@ -355,6 +355,15 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 }
             }
 
+            // "Obrigado.", "Tchau"…: o Whisper inventa isso quando não entende o áudio. Não manda para a casa
+            // (nem aprende); reabre o microfone para a pessoa repetir.
+            if (text.isNotBlank() && br.com.jarvishome.commands.Learning.isHallucination(text)) {
+                JLog.i("Transcrição descartada: “$heard” (o Whisper inventa isso quando não entende)")
+                onEvent(JSONObject().put("type", "transcription").put("text", "").put("heard", heard))
+                onEvent(error("only-wake-word", "Não entendi o comando"))
+                return
+            }
+
             // Agenda: respondida pelo próprio app (antes da correção, para manter o título como foi falado).
             if (backend.calendarEnabled && text.isNotBlank()) {
                 val answer = try {

@@ -50,9 +50,25 @@ object Learning {
     }
 
     /** Acrescenta (ou reforça) uma correção. Mantém as [MAX_FIXES] mais usadas/recentes. */
+    /**
+     * Frases que o Whisper INVENTA quando o áudio não tem comando claro (curto, baixo, só barulho):
+     * vêm das legendas de vídeos com que ele foi treinado. Nunca são comando de verdade.
+     */
+    private val HALLUCINATIONS = setOf(
+        "obrigado", "obrigada", "muito obrigado", "muito obrigada", "obrigado por assistir", "obrigada por assistir",
+        "obrigado pela atencao", "tchau", "tchau tchau", "ate a proxima", "ate mais", "valeu", "e ai",
+        "inscreva se", "inscreva se no canal", "legendas pela comunidade amara org", "legenda adriana zanotto",
+        "sous titres realises par la communaute d amara org", "thank you", "thanks for watching", "you", "musica"
+    )
+
+    fun isHallucination(text: String): Boolean {
+        val k = key(text)
+        return k.isEmpty() || k in HALLUCINATIONS || k.contains("amara org") || k.startsWith("legenda")
+    }
+
     fun addFix(list: MutableList<Fix>, heard: String, sent: String, now: Long): MutableList<Fix> {
         val k = key(heard)
-        if (k.isEmpty() || k == key(sent)) return list
+        if (k.isEmpty() || k == key(sent) || isHallucination(heard)) return list
         val old = list.firstOrNull { key(it.heard) == k }
         if (old != null) {
             if (key(old.sent) == key(sent)) { old.hits++; old.last = now } else { list.remove(old); list.add(Fix(heard, sent, 1, now)) }

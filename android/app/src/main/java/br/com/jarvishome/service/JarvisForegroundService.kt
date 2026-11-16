@@ -61,6 +61,8 @@ class JarvisForegroundService : Service() {
     @Volatile private var mode = Mode.IDLE
     @Volatile private var running = false
     @Volatile private var manualTrigger = false
+    /** Reaberturas seguidas por "só a chamada"/transcrição inventada: no máximo uma (TV não vira laço). */
+    @Volatile private var reopenStreak = 0
 
     // ---------------------------------------------------------------- reforço (aprendizado)
     /** A chamada que abriu a conversa atual (vira exemplo se o comando der certo). */
@@ -612,7 +614,9 @@ class JarvisForegroundService : Service() {
         learnCandidate = hit.learnFrames
         activatedByLearned = hit.viaLearned
         lastActivationByDetector = true
-        val audio = if (hit.oneBreath) hit.whole + hit.afterSegment else hit.afterSegment
+        // Sempre com o "Hey Tony" na frente: um "liga" sozinho é curto demais e o Whisper inventa
+        // ("Obrigado."); com a chamada junto ele tem contexto. A chamada sai do texto depois.
+        val audio = hit.whole + hit.afterSegment
         val pcm = if (audio.isNotEmpty()) floatsToBytes(audio) else null
         beginListening(
             when {
@@ -630,6 +634,7 @@ class JarvisForegroundService : Service() {
         synchronized(lock) {
             if (mode != Mode.IDLE) return
             JLog.i("Ativado por: $reason")
+            if (reason != "toque") reopenStreak = 0
             mode = Mode.LISTENING
             vad.silenceMs = prefs.silenceMs
             if (alreadySpoke) vad.startAfterSpeech() else vad.start()
@@ -737,8 +742,18 @@ class JarvisForegroundService : Service() {
         }
 
         val code = errCode
+        if (code == "only-wake-word" && reopenStreak >= 1) {
+            reopenStreak = 0
+            JLog.i("De novo sem comando entendível: volta a esperar")
+            main.post {
+                StateBus.setState(AssistantState.CONFUSED, "Não entendi o comando")
+                main.postDelayed({ goIdle() }, 1500)
+            }
+            return
+        }
+        reopenStreak = if (code == "only-wake-word") reopenStreak + 1 else 0
         if (code == "only-wake-word") {
-            // Ouviu só a palavra de ativação: reabre o microfone para o comando.
+            // Ouviu só a palavra de ativação (ou o Whisper inventou "Obrigado"): reabre o microfone para o comando.
             main.post {
                 if (mode != Mode.SLEEPING) {
                     mode = Mode.IDLE
