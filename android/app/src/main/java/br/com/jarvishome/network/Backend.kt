@@ -40,7 +40,10 @@ object Backends {
             trained = br.com.jarvishome.commands.LightCommands.decode(prefs.trainedCommands),
             workoutPlan = prefs.workoutPlan(),
             learnedFixes = if (prefs.learnFromSuccess)
-                br.com.jarvishome.commands.Learning.asMap(br.com.jarvishome.commands.Learning.decode(prefs.learnedFixes)) else emptyMap()
+                br.com.jarvishome.commands.Learning.asMap(br.com.jarvishome.commands.Learning.decode(prefs.learnedFixes)) else emptyMap(),
+            listsEnabled = prefs.listsEnabled,
+            shoppingList = prefs.shoppingList,
+            tasksList = prefs.tasksList
         )
         else JarvisApi(prefs)
 }

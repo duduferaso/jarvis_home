@@ -213,7 +213,7 @@ class JarvisForegroundService : Service() {
         voiceExecutor.execute {
             val f = try { voiceFile(text) } catch (e: Throwable) { JLog.w("Voz do Home Assistant falhou", e); null }
             main.post {
-                if (f != null) player.play(f, prefs.volume / 100f, onStart = {}, onDone = { ok ->
+                if (f != null) player.play(f, Night.volume(prefs), onStart = {}, onDone = { ok ->
                     if (ok) onDone() else { JLog.w("Áudio não tocou; usando a voz do Android"); player.speakLocal(text) { onDone() } }
                 })
                 else { JLog.w("Sem a voz do Home Assistant; usando a voz do Android: “$text”"); player.speakLocal(text) { onDone() } }
@@ -224,7 +224,7 @@ class JarvisForegroundService : Service() {
     /** Frase do treino: toca na hora se já foi gerada; senão gera e toca. */
     private fun cue(text: String) {
         val cached = voiceCache[text]?.takeIf { it.exists() }
-        if (cached != null) { player.play(cached, prefs.volume / 100f, onStart = {}, onDone = {}); return }
+        if (cached != null) { player.play(cached, Night.volume(prefs), onStart = {}, onDone = {}); return }
         speakHa(text) {}
     }
     private var coach: WorkoutCoach? = null
@@ -267,7 +267,7 @@ class JarvisForegroundService : Service() {
         br.com.jarvishome.domain.CrashLog.install(this)
         Provisioning.apply(this)
         prefs = Prefs(this)
-        player = AudioPlayer(this) { prefs.volume / 100f }
+        player = AudioPlayer(this) { Night.volume(prefs) }
         sessionExecutor = Executors.newSingleThreadExecutor()
         healthExecutor = Executors.newSingleThreadExecutor()
         createChannel()
@@ -312,7 +312,7 @@ class JarvisForegroundService : Service() {
             ACTION_TOGGLE_SLEEP -> setSleeping(mode != Mode.SLEEPING)
             ACTION_RELOAD -> reload()
             ACTION_TEST_VOICE -> {
-                player.beep(prefs.beep)
+                player.beep(prefs.beep, Night.beepVolume(prefs))
                 speakHa("Teste de áudio. Esta é a voz que vai te responder.") {}
             }
             ACTION_PAUSE_MIC -> {
@@ -612,7 +612,7 @@ class JarvisForegroundService : Service() {
         }
         StateBus.setTranscript("")
         StateBus.setState(AssistantState.LISTENING, if (alreadySpoke) "Entendido…" else "Pode falar…")
-        if (!alreadySpoke && !quietStart) main.post { player.beep(prefs.beep) }
+        if (!alreadySpoke && !quietStart) main.post { player.beep(prefs.beep, Night.beepVolume(prefs)) }
         if (!prefs.isConfigured) {
             mode = Mode.BUSY
             fail("not_configured", null)
@@ -762,7 +762,7 @@ class JarvisForegroundService : Service() {
             "error" -> AssistantState.CONFUSED
             else -> null
         }
-        val volume = prefs.volume / 100f
+        val volume = Night.volume(prefs)
         when {
             file != null -> player.play(file, volume,
                 onStart = { StateBus.setState(AssistantState.SPEAKING, text) },
@@ -863,7 +863,7 @@ class JarvisForegroundService : Service() {
         }
         mode = Mode.BUSY
         StateBus.setState(AssistantState.SPEAKING, text)
-        player.beep(prefs.beep)
+        player.beep(prefs.beep, Night.beepVolume(prefs))
         val backend = Backends.create(prefs)
         voiceExecutor.execute {
             var file: File? = null
@@ -877,7 +877,7 @@ class JarvisForegroundService : Service() {
             main.post {
                 if (mode == Mode.SLEEPING) return@post
                 if (f != null) {
-                    player.play(f, prefs.volume / 100f,
+                    player.play(f, Night.volume(prefs),
                         onStart = { StateBus.setState(AssistantState.SPEAKING, text) },
                         onDone = { ok -> if (ok) afterAnnouncement() else player.speakLocal(text) { afterAnnouncement() } })
                 } else {

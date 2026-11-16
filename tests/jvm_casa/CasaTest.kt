@@ -80,6 +80,16 @@ fun main() {
     val fq = br.com.jarvishome.home.Forecast.parseQuery("vai chover amanhã?", java.time.LocalDate.now())!!
     val fans = br.com.jarvishome.home.Forecast.answer(fq, fdays, null, java.time.LocalDate.now())
     ok(fans.startsWith("Sim, amanhã tem 85%"), "resposta: $fans")
+    println("-- listas (todo.*)")
+    val tl = br.com.jarvishome.commands.Lists.pick(br.com.jarvishome.commands.Lists.Which.SHOPPING, br.com.jarvishome.commands.Lists.listsFrom(api.states()), "")
+    ok(tl?.entityId == "todo.shopping_list", "lista de compras achada: $tl")
+    ok(br.com.jarvishome.commands.Lists.itemsFrom(api.todoItems(tl!!.entityId), tl.entityId).map { it.summary } == listOf("Leite"), "lê os itens pelo serviço todo.get_items")
+    api.todoAdd(tl.entityId, "Pão")
+    val afterAdd = br.com.jarvishome.commands.Lists.itemsFrom(api.todoItems(tl.entityId), tl.entityId)
+    ok(afterAdd.map { it.summary } == listOf("Leite", "Pão"), "adicionou pão: ${afterAdd.map { it.summary }}")
+    val leite = br.com.jarvishome.commands.Lists.match("leite", afterAdd)!!
+    api.todoComplete(tl.entityId, leite.uid)
+    ok(br.com.jarvishome.commands.Lists.itemsFrom(api.todoItems(tl.entityId), tl.entityId).map { it.summary } == listOf("Pão"), "comprei leite: some dos pendentes")
     println("-- regra única do que é luz (tela = voz)")
     ok(br.com.jarvishome.commands.LightCommands.isLight("switch.x", "Interruptor luz-varanda"), "switch “luz-varanda” é luz")
     ok(br.com.jarvishome.commands.LightCommands.isLight("switch.y", "Lâmpada da garagem"), "switch “Lâmpada” é luz")

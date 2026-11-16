@@ -69,9 +69,11 @@ object TextCorrector {
             val next = if (i + 1 < tokens.size) normalize(tokens[i + 1]).replace(" ", "") else ""
             when {
                 // primeiro a chamada partida em duas ("Jar vis"), depois inteira
-                next.isNotEmpty() && isWake(t + next) && !isWake(next) -> { i += 2; lastWake = i }
+                // ("Toni o que…" não junta: "Toni" já é a chamada inteira, o "o" é do comando)
+                next.isNotEmpty() && t !in wake && isWake(t + next) && !isWake(next) -> { i += 2; lastWake = i }
                 isWake(t) -> { i++; lastWake = i }
-                (t in fillers || t in interjections) && tokens.size - i > 2 -> i++
+                // antes da chamada: "Ei, Tony", "Ok Tony"; depois dela já é o comando ("Tony, o que tem…")
+                (t in fillers || t in interjections) && lastWake < 0 && tokens.size - i > 2 -> i++
                 else -> break
             }
         }

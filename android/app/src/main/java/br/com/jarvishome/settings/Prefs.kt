@@ -201,6 +201,31 @@ class Prefs(context: Context) {
         get() = sp.getInt("night_end", 6)
         set(v) = sp.edit().putInt("night_end", v.coerceIn(0, 23)).apply()
 
+    /** Voz mais baixa no modo noite (como o "modo sussurro" da Alexa). */
+    var quietAtNight: Boolean
+        get() = sp.getBoolean("quiet_at_night", true)
+        set(v) = sp.edit().putBoolean("quiet_at_night", v).apply()
+
+    /** Volume das respostas no modo noite (%). Nunca passa do volume normal. */
+    var nightVolume: Int
+        get() = sp.getInt("night_volume", 35)
+        set(v) = sp.edit().putInt("night_volume", v.coerceIn(5, 100)).apply()
+
+    // ---- listas (compras e tarefas) no Home Assistant (todo.*)
+    var listsEnabled: Boolean
+        get() = sp.getBoolean("lists_enabled", true)
+        set(v) = sp.edit().putBoolean("lists_enabled", v).apply()
+
+    /** Entidade da lista de compras ("" = escolher sozinho). */
+    var shoppingList: String
+        get() = sp.getString("shopping_list", "") ?: ""
+        set(v) = sp.edit().putString("shopping_list", v).apply()
+
+    /** Entidade da lista de tarefas ("" = escolher sozinho). */
+    var tasksList: String
+        get() = sp.getString("tasks_list", "") ?: ""
+        set(v) = sp.edit().putString("tasks_list", v).apply()
+
     /** Falar avisos e lembretes durante o modo noite (padrão: só mostrar). */
     var speakAtNight: Boolean
         get() = sp.getBoolean("speak_at_night", false)

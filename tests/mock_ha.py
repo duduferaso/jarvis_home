@@ -26,6 +26,8 @@ from aiohttp import web
 TZ = datetime.timezone(datetime.timedelta(hours=-3))
 
 
+TODO = [{"summary": "Leite", "uid": "u1", "status": "needs_action"}]
+
 def fresh():
     return {"lights": {"light.luz_do_quarto": "off", "light.luz_da_sala": "on", "light.luz_da_cozinha": "off",
                        "switch.luz_do_jantar": "on"},
@@ -71,6 +73,8 @@ def all_states():
             ("automation.wakeup", "WakeUp")]
     out = [{"entity_id": e, "state": "off", "attributes": {"friendly_name": n}} for e, n in ents]
     out += [{"entity_id": e, "state": st, "attributes": {"friendly_name": NAMES[e]}} for e, st in S["lights"].items()]
+    out.append({"entity_id": "todo.shopping_list", "state": str(sum(1 for i in TODO if i["status"] == "needs_action")),
+                "attributes": {"friendly_name": "Lista de compras"}})
     out.append({"entity_id": "weather.casa", "state": "partlycloudy", "last_updated": iso_now(),
                 "attributes": {"friendly_name": "Casa", "temperature": 24, "temperature_unit": "°C"}})
     out.append({"entity_id": "sensor.temperatura_do_processador", "state": "78",
@@ -111,6 +115,24 @@ async def service(request):
             if e not in S["lights"]:
                 return web.json_response({"message": "Entity not found"}, status=400)
             S["lights"][e] = "on" if svc == "turn_on" else "off"
+    elif domain == "todo":
+        if svc == "get_items":
+            if "return_response" not in request.query:
+                return web.json_response({"message": "Service call requires responses"}, status=400)
+            want = data.get("status") or ["needs_action", "completed"]
+            return web.json_response({"changed_states": [], "service_response": {data["entity_id"]: {
+                "items": [i for i in TODO if i["status"] in want]}}})
+        if svc == "add_item":
+            TODO.append({"summary": data["item"], "uid": "u%d" % (len(TODO) + 1), "status": "needs_action"})
+        elif svc in ("update_item", "remove_item"):
+            hit = [i for i in TODO if i["uid"] == data["item"] or i["summary"] == data["item"]]
+            if not hit:
+                return web.json_response({"message": "Unable to find to-do list item"}, status=400)
+            if svc == "remove_item":
+                TODO.remove(hit[0])
+            else:
+                hit[0]["status"] = data.get("status", hit[0]["status"])
+        return web.json_response([])
     elif (domain, svc) == ("weather", "get_forecasts"):
         if "return_response" not in request.query:
             return web.json_response({"message": "Service call requires responses but caller did not ask for responses"}, status=400)

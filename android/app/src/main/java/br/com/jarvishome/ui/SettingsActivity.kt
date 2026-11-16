@@ -90,6 +90,9 @@ class SettingsActivity : Activity() {
     private lateinit var swShowWeather: Switch
     private lateinit var swNight: Switch
     private lateinit var swSpeakNight: Switch
+    private lateinit var swLists: Switch
+    private lateinit var swQuietNight: Switch
+    private var nightVolume = 35
     private lateinit var sensorsField: EditText
     private var reminderLead = 0
     private var nightStart = 23
@@ -172,6 +175,7 @@ class SettingsActivity : Activity() {
             "Aprendizado (reforço)" to "Voz",
             "Comandos de luz" to "Comandos",
             "Entender melhor os comandos" to "Comandos",
+            "Listas de compras e de tarefas" to "Comandos",
             "Treino" to "Comandos",
             "Agenda" to "Agenda",
             "Avisos do Home Assistant" to "Agenda",
@@ -247,6 +251,39 @@ class SettingsActivity : Activity() {
         }
         box.addView(card)
         form = card
+    }
+
+    private fun listsText(): String =
+        "Compras: " + (prefs.shoppingList.ifBlank { "escolher sozinho" }) + "\nTarefas: " + (prefs.tasksList.ifBlank { "escolher sozinho" })
+
+    /** Lê as listas todo.* do Home Assistant e deixa escolher. */
+    private fun chooseList(shopping: Boolean, info: TextView) {
+        val url = prefs.serverUrl; val token = prefs.token
+        Thread {
+            val lists = try {
+                br.com.jarvishome.commands.Lists.listsFrom(br.com.jarvishome.home.HomeApi(url, token).states())
+            } catch (t: Throwable) { JLog.w("Não li as listas", t); null }
+            runOnUiThread {
+                if (isFinishing) return@runOnUiThread
+                when {
+                    lists == null -> Toast.makeText(this, "Não consegui falar com o Home Assistant.", Toast.LENGTH_LONG).show()
+                    lists.isEmpty() -> AlertDialog.Builder(this).setTitle("Nenhuma lista")
+                        .setMessage("O Home Assistant não tem listas. Em Configurações → Dispositivos e serviços, adicione " +
+                            "“Lista de compras” (Shopping list) ou “Tarefas locais” (Local To-do). Se já existem, " +
+                            "confira se o usuário jarvis consegue vê-las.")
+                        .setPositiveButton("OK", null).show()
+                    else -> {
+                        val names = listOf("Escolher sozinho (pelo nome)") + lists.map { it.name + "  (" + it.entityId + ")" }
+                        AlertDialog.Builder(this).setTitle(if (shopping) "Lista de compras" else "Lista de tarefas")
+                            .setItems(names.toTypedArray()) { _, i ->
+                                val v = if (i == 0) "" else lists[i - 1].entityId
+                                if (shopping) prefs.shoppingList = v else prefs.tasksList = v
+                                info.text = listsText()
+                            }.show()
+                    }
+                }
+            }
+        }.start()
     }
 
     private fun note(text: String): TextView {
@@ -473,6 +510,15 @@ class SettingsActivity : Activity() {
         form.addView(vocabField)
         note("Ex.: nomes de scripts e comandos personalizados. Escreva do jeito que você fala.")
 
+        section("Listas de compras e de tarefas")
+        swLists = switch("Listas por voz", prefs.listsEnabled)
+        val listsInfo = note(listsText())
+        button("Escolher a lista de compras") { chooseList(true, listsInfo) }
+        button("Escolher a lista de tarefas") { chooseList(false, listsInfo) }
+        note("Usa as listas do Home Assistant (integração Lista de compras ou Tarefas locais). " +
+            "“Hey Tony, coloca leite e pão na lista de compras”, “o que tem na lista?”, “comprei leite”, " +
+            "“coloca pagar a conta de luz na lista de tarefas”. Elas aparecem também no app do Home Assistant no seu celular.")
+
         section("Agenda")
         swCalendar = switch("Marcar e consultar a agenda por voz", prefs.calendarEnabled)
         val cals = HomeModel.calendars
@@ -553,7 +599,12 @@ class SettingsActivity : Activity() {
         slider("Começa às", 18, 23, 1, nightStart.coerceIn(18, 23), { v -> "${v}h" }) { nightStart = it }
         slider("Termina às", 4, 9, 1, nightEnd.coerceIn(4, 9), { v -> "${v}h" }) { nightEnd = it }
         swSpeakNight = switch("Falar avisos e lembretes durante a noite", prefs.speakAtNight)
-        note("Desligado: à noite os avisos só aparecem na tela.")
+        note("Desligado: à noite os avisos só aparecem na tela. Timers e alarmes que você pediu falam sempre.")
+        swQuietNight = switch("Responder com voz baixa à noite", prefs.quietAtNight)
+        nightVolume = prefs.nightVolume
+        slider("Volume à noite", 10, 80, 5, nightVolume.coerceIn(10, 80), { v -> "$v%" }) { nightVolume = it }
+        note("Vale para as respostas e o bipe nos horários acima (nunca mais alto que o volume normal). " +
+            "O toque de timer e de alarme continua no volume normal.")
 
         section("Tela e terminal")
         swScreenOn = switch("Manter tela ligada", prefs.keepScreenOn)
@@ -668,6 +719,7 @@ class SettingsActivity : Activity() {
             JLog.i("Exigência do detector pessoal: " + String.format(Locale.US, "%.2f", personalThreshold))
         }
         prefs.correctText = swCorrect.isChecked
+        prefs.listsEnabled = swLists.isChecked
         prefs.localLights = swLocalLights.isChecked
         prefs.showFloorPlan = swFloorPlan.isChecked
         prefs.learnFromSuccess = swLearn.isChecked
@@ -684,6 +736,8 @@ class SettingsActivity : Activity() {
         prefs.nightStart = nightStart
         prefs.nightEnd = nightEnd
         prefs.speakAtNight = swSpeakNight.isChecked
+        prefs.quietAtNight = swQuietNight.isChecked
+        prefs.nightVolume = nightVolume
         packageManager.setComponentEnabledSetting(homeAlias,
             if (swHome.isChecked) PackageManager.COMPONENT_ENABLED_STATE_ENABLED
             else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,

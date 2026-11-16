@@ -122,6 +122,16 @@ object HomeModel {
 
 /** Horário do modo noite (pode atravessar a meia-noite: 23h → 6h). */
 object Night {
+    /** Volume das respostas agora (0..1): à noite, o volume da noite, se estiver ligado. */
+    fun volume(prefs: Prefs, t: LocalTime = LocalTime.now()): Float {
+        val v = if (prefs.quietAtNight && isNight(prefs, t)) minOf(prefs.volume, prefs.nightVolume) else prefs.volume
+        return v / 100f
+    }
+
+    /** Volume do bipe (0..100 do ToneGenerator): baixo à noite. */
+    fun beepVolume(prefs: Prefs, t: LocalTime = LocalTime.now()): Int =
+        if (prefs.quietAtNight && isNight(prefs, t)) 20 else 55
+
     fun isNight(prefs: Prefs, t: LocalTime = LocalTime.now()): Boolean {
         if (!prefs.nightMode) return false
         val s = prefs.nightStart

@@ -8,6 +8,7 @@ import br.com.jarvishome.domain.JLog
 import br.com.jarvishome.home.HomeApi
 import org.json.JSONArray
 import org.json.JSONObject
+import br.com.jarvishome.commands.Lists
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -40,7 +41,11 @@ class HaDirectBackend(
     /** Plano de treino salvo (para "Hey Tony, começa o treino"). */
     internal val workoutPlan: br.com.jarvishome.commands.Workout.Plan = br.com.jarvishome.commands.Workout.Plan(30, 30, 30, emptyList()),
     /** Correções aprendidas (frase ouvida normalizada → frase que funcionou). */
-    internal val learnedFixes: Map<String, String> = emptyMap()
+    internal val learnedFixes: Map<String, String> = emptyMap(),
+    /** Listas por voz (todo.*): ligado + lista escolhida de compras e de tarefas ("" = escolher sozinho). */
+    internal val listsEnabled: Boolean = true,
+    internal val shoppingList: String = "",
+    internal val tasksList: String = ""
 ) : Backend {
 
     internal val base = baseUrl.trimEnd('/')
@@ -364,6 +369,24 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 return
             }
 
+            // Listas de compras e de tarefas (todo.* do Home Assistant)
+            if (backend.listsEnabled && text.isNotBlank()) {
+                val cmd = Lists.parse(text)
+                if (cmd != null) {
+                    val speech = try { runList(cmd) } catch (e: Exception) {
+                        JLog.w("Lista indisponível", e)
+                        "Não consegui mexer na ${Lists.listName(cmd.which)} agora."
+                    }
+                    JLog.i("Lista: “$text” → “$speech”")
+                    onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "lista"))
+                    onEvent(JSONObject().put("type", "response").put("text", speech).put("response_type", "action_done")
+                        .put("continue_conversation", false))
+                    val url = try { HaDirectBackend.speakOn(socket, 8, backend.pipelineId, speech) } catch (e: Exception) { null }
+                    if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
+                    return
+                }
+            }
+
             // Previsão do tempo (hoje, amanhã, sábado, semana, "vai chover?"): o assistente do HA só sabe o "agora".
             if (text.isNotBlank()) {
                 val today = java.time.LocalDate.now()
@@ -458,6 +481,41 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             throw e
         } finally {
             socket.close()
+        }
+    }
+
+    /** Executa um comando de lista no Home Assistant e devolve a frase da resposta. */
+    private fun runList(cmd: Lists.Cmd): String {
+        val api = HomeApi(backend.base, backend.token)
+        val lists = Lists.listsFrom(api.states())
+        val chosen = if (cmd.which == Lists.Which.SHOPPING) backend.shoppingList else backend.tasksList
+        val list = Lists.pick(cmd.which, lists, chosen)
+            ?: return if (lists.isEmpty()) "Não encontrei nenhuma lista no Home Assistant. Ative a Lista de compras em Configurações, Dispositivos e serviços."
+            else "Não sei qual é a ${Lists.listName(cmd.which)}. Escolha nas configurações do Jarvis, na aba Comandos."
+        val items = Lists.itemsFrom(api.todoItems(list.entityId), list.entityId)
+        return when (cmd) {
+            is Lists.Cmd.Read -> Lists.readSpeech(cmd.which, items)
+            is Lists.Cmd.Add -> {
+                val added = ArrayList<String>(); val already = ArrayList<String>()
+                for (it in cmd.items) {
+                    if (Lists.match(it, items)?.let { m -> Lists.fold(m.summary).trim() == Lists.fold(it).trim() } == true) already.add(it)
+                    else { api.todoAdd(list.entityId, it); added.add(it) }
+                }
+                Lists.addSpeech(cmd.which, added, already)
+            }
+            is Lists.Cmd.Remove -> {
+                val removed = ArrayList<String>(); val missing = ArrayList<String>()
+                for (it in cmd.items) {
+                    val m = Lists.match(it, items)
+                    if (m == null) missing.add(it)
+                    else {
+                        // marca como feito (fica no histórico da lista no Home Assistant)
+                        api.todoComplete(list.entityId, m.uid.ifBlank { m.summary })
+                        removed.add(m.summary)
+                    }
+                }
+                Lists.removeSpeech(cmd.which, removed, missing, cmd.bought)
+            }
         }
     }
 

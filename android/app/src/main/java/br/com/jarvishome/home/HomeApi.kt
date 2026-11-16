@@ -66,6 +66,21 @@ class HomeApi(baseUrl: String, private val token: String) : CalendarApi {
         JSONObject(request("POST", "/api/services/weather/get_forecasts?return_response",
             JSONObject().put("entity_id", entityId).put("type", type), 10000))
 
+    /** Itens pendentes de uma lista todo.* (todo.get_items com resposta). */
+    fun todoItems(entityId: String): JSONObject =
+        JSONObject(request("POST", "/api/services/todo/get_items?return_response",
+            JSONObject().put("entity_id", entityId).put("status", JSONArray().put("needs_action")), 10000))
+
+    fun todoAdd(entityId: String, item: String) =
+        callService("todo", "add_item", JSONObject().put("entity_id", entityId).put("item", item))
+
+    /** Marca como feito/comprado (item = uid ou o texto exato). */
+    fun todoComplete(entityId: String, item: String) =
+        callService("todo", "update_item", JSONObject().put("entity_id", entityId).put("item", item).put("status", "completed"))
+
+    fun todoRemove(entityId: String, item: String) =
+        callService("todo", "remove_item", JSONObject().put("entity_id", entityId).put("item", item))
+
     /** Liga/desliga luzes. Sempre explícito (nunca "toggle"): tela, planta e voz usam este. */
     fun setPower(ids: List<String>, on: Boolean) {
         val arr = JSONArray()

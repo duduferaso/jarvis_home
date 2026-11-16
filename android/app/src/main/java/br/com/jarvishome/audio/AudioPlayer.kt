@@ -52,10 +52,16 @@ class AudioPlayer(private val context: Context, private val volume: () -> Float 
         }
     }
 
-    fun beep(enabled: Boolean) {
+    private var toneVolume = -1
+
+    fun beep(enabled: Boolean, volume: Int = 55) {
         if (!enabled) return
         try {
-            if (tone == null) tone = ToneGenerator(AudioManager.STREAM_MUSIC, 55)
+            if (tone == null || toneVolume != volume) {
+                try { tone?.release() } catch (_: Throwable) {}
+                tone = ToneGenerator(AudioManager.STREAM_MUSIC, volume.coerceIn(5, 100))
+                toneVolume = volume
+            }
             tone?.startTone(ToneGenerator.TONE_PROP_BEEP, 110)
         } catch (e: Exception) {
             JLog.w("Falha no bipe", e)
