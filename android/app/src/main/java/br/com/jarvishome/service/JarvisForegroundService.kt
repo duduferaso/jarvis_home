@@ -619,10 +619,10 @@ class JarvisForegroundService : Service() {
                 hit.oneBreath -> "detector pessoal (frase única)"
                 hit.speechAfter -> "detector pessoal (comando logo depois)"
                 else -> "detector pessoal"
-            }, pcm, alreadySpoke = hit.oneBreath || hit.speechAfter)
+            }, pcm, alreadySpoke = hit.oneBreath, quietStart = hit.speechAfter)
     }
 
-    private fun beginListening(reason: String, preRoll: ByteArray?, alreadySpoke: Boolean = false) {
+    private fun beginListening(reason: String, preRoll: ByteArray?, alreadySpoke: Boolean = false, quietStart: Boolean = false) {
         if (Timers.stopRinging()) {
             beeper.stop()
             JLog.i("Toque do timer parado ($reason)")
@@ -636,7 +636,7 @@ class JarvisForegroundService : Service() {
         }
         StateBus.setTranscript("")
         StateBus.setState(AssistantState.LISTENING, if (alreadySpoke) "Entendido…" else "Pode falar…")
-        if (!alreadySpoke) main.post { player.beep(prefs.beep) }
+        if (!alreadySpoke && !quietStart) main.post { player.beep(prefs.beep) }
         if (!prefs.isConfigured) {
             mode = Mode.BUSY
             fail("not_configured", null)

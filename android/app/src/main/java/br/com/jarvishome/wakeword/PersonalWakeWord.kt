@@ -34,8 +34,9 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
         /** Se ativou só por um exemplo aprendido: qual (para esquecer se tiver sido à toa). */
         val viaLearned: Array<FloatArray>? = null
     ) {
-        /** "Hey Tony, liga a luz" numa frase só: o comando já está no áudio. */
-        val oneBreath: Boolean get() = command.size > ONE_BREATH_MIN
+        /** "Hey Tony, liga a luz" numa frase só: o comando já está no áudio. Calculado com cuidado em [process]. */
+        var oneBreath: Boolean = false
+            internal set
     }
 
     private val vad: Vad = Vad(
@@ -136,9 +137,18 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
                         VoiceFeatures.compute(crop.copyOf(endSample)).frames.takeIf { it.size >= 15 }
                     } else null
                 } catch (e: Exception) { null }
+                // Antes: qualquer barulho até 20 dB abaixo da voz (TV, ventilador, o fim do próprio "Tony")
+                // contava como "já começou o comando" → ia direto para "Pensando…" e só depois abria o microfone.
+                val wakePeak = peakDb(if (wakeEndInSeg in 1 until samples.size) samples.copyOf(wakeEndInSeg) else samples)
+                val cmdPeak = peakDb(command)
+                val oneBreath = command.size >= ONE_BREATH_MIN && cmdPeak > wakePeak - BREATH_DB
+                val speechAfter = !oneBreath && vad.isSpeechDetected() && peakDb(after) > wakePeak - BREATH_DB
+                JLog.i(String.format(java.util.Locale.US, "Chamada: distância %.3f · depois dela %.2f s (%.0f dB vs %.0f dB) → %s",
+                    score.distance, command.size / 16000f, cmdPeak, wakePeak,
+                    if (oneBreath) "frase única" else if (speechAfter) "já falando" else "abre o microfone"))
                 trigger = Trigger(score.distance, command, after, pre.copyOfRange(maxOf(0, pre.size - 1600), pre.size) + samples,
-                    peakDb(after) > peakDb(samples) - 20.0, learn,
-                    if (viaLearned) set.templates[score.index] else null)
+                    speechAfter, learn,
+                    if (viaLearned) set.templates[score.index] else null).also { it.oneBreath = oneBreath }
             }
         }
         return trigger
@@ -171,7 +181,8 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
         private const val PREROLL = 2400            // 0,15 s antes da fala (igual ao treino)
         private const val CROP = 35200              // 2,2 s analisados
         private const val MIN_SEGMENT = 5600        // 0,35 s
-        private const val ONE_BREATH_MIN = 8000     // 0,5 s de fala depois da chamada
+        private const val ONE_BREATH_MIN = 11200    // 0,7 s de fala depois da chamada ("Tonyyy" arrastado não conta)
+        private const val BREATH_DB = 12.0          // o comando tem de ser fala de verdade, não barulho de fundo
         private const val LEARNED_STRICT = 0.85f    // exemplo aprendido precisa ser 15% mais parecido
     }
 }
