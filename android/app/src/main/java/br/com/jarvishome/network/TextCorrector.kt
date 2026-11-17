@@ -57,6 +57,11 @@ object TextCorrector {
                 // pedaço do começo da chamada ("tom" de "tony", "jarv" de "jarvis"), nunca palavra maior que ela
                 (n.length >= 4 && w.length >= 3 && w.length < n.length && levenshtein(w, n.substring(0, w.length)) <= 1)
         }
+        // A chamada vai SEMPRE no começo do áudio, e o Whisper a junta numa palavra só:
+        // "Reitone", "Heitori", "Eitony", "Rei tone". Só no começo da frase, perto de "Hey Tony".
+        val joinedForms = names.map { normalize(it).replace(" ", "") }.filter { it.length >= 4 }
+            .flatMap { n -> listOf(n, "hey$n", "hei$n", "ei$n") }.toSet()
+        fun nearWake(w: String) = w.length >= 5 && joinedForms.any { n -> n.length >= 6 && levenshtein(w, n) <= 2 }
         // Só saem junto com a chamada (podem começar um comando: "o ventilador…").
         val interjections = setOf("o", "oh", "ok", "okay", "ola", "alo")
         // Restos da chamada que o Whisper transforma em palavras ("ei Tony" → "e então"):
@@ -71,9 +76,11 @@ object TextCorrector {
                 // primeiro a chamada partida em duas ("Jar vis"), depois inteira
                 // ("Toni o que…" não junta: "Toni" já é a chamada inteira, o "o" é do comando)
                 next.isNotEmpty() && t !in wake && isWake(t + next) && !isWake(next) -> { i += 2; lastWake = i }
-                isWake(t) -> { i++; lastWake = i }
+                next.isNotEmpty() && lastWake < 0 && i <= 1 && !isWake(t) && nearWake(t + next) -> { i += 2; lastWake = i }
+                isWake(t) || (lastWake < 0 && i <= 1 && nearWake(t)) -> { i++; lastWake = i }
                 // antes da chamada: "Ei, Tony", "Ok Tony"; depois dela já é o comando ("Tony, o que tem…")
-                (t in fillers || t in interjections) && lastWake < 0 && tokens.size - i > 2 -> i++
+                (t in fillers || t in interjections) && lastWake < 0 &&
+                    (tokens.size - i > 2 || (next.isNotEmpty() && (isWake(next) || nearWake(next)))) -> i++
                 else -> break
             }
         }

@@ -61,6 +61,8 @@ class JarvisForegroundService : Service() {
     @Volatile private var manualTrigger = false
     /** Reaberturas seguidas por "só a chamada"/transcrição inventada: no máximo uma (TV não vira laço). */
     @Volatile private var reopenStreak = 0
+    /** Até quando o áudio do microfone vai como silêncio para a sessão (o bipe tocando). */
+    @Volatile private var muteUntil = 0L
 
     // ---------------------------------------------------------------- reforço (aprendizado)
     /** A chamada que abriu a conversa atual (vira exemplo se o comando der certo). */
@@ -527,7 +529,7 @@ class JarvisForegroundService : Service() {
                     if (trigger != null) beginListening(trigger, lastBytes)
                 }
                 Mode.LISTENING -> {
-                    session?.push(bytes)
+                    session?.push(if (System.currentTimeMillis() < muteUntil) ByteArray(bytes.size) else bytes)
                     when (vad.process(rms)) {
                         VoiceActivityDetector.Result.CONTINUE -> {}
                         VoiceActivityDetector.Result.END_OF_SPEECH,
@@ -608,7 +610,11 @@ class JarvisForegroundService : Service() {
             if (reason != "toque") reopenStreak = 0
             mode = Mode.LISTENING
             vad.silenceMs = prefs.silenceMs
-            if (alreadySpoke) vad.startAfterSpeech() else vad.start()
+            // com bipe, os primeiros 300 ms (o próprio bipe no alto-falante) não contam como fala
+            val beeping = !alreadySpoke && !quietStart && prefs.beep
+            if (alreadySpoke) vad.startAfterSpeech() else vad.start(if (beeping) 300 else 0)
+            // o bipe também não vai para o Whisper (ele confunde: "Reitone.", "(nada)")
+            muteUntil = if (beeping) System.currentTimeMillis() + 300 else 0L
         }
         StateBus.setTranscript("")
         StateBus.setState(AssistantState.LISTENING, if (alreadySpoke) "Entendido…" else "Pode falar…")

@@ -17,6 +17,18 @@ class VoiceActivityDetector(var silenceMs: Int, private val frameMs: Int = 100) 
     private var silenceAcc = 0
     private var elapsed = 0
     private var speechFrames = 0
+    private var speechMs = 0
+    private var ignoreMs = 0
+
+    /**
+     * Fala mínima para valer como comando. Um bipe (110 ms), um estalo ou o eco do próprio aparelho
+     * passam do limiar por 1–2 quadros; antes isso já contava como "começou a falar" e, se a pessoa
+     * esperasse mais que o silêncio configurado depois do bipe, a frase acabava antes do comando
+     * (o Whisper recebia só o "Hey Tony" → "Reitone.", "Heitori.", "(nada)").
+     */
+    var minSpeechMs = 300
+    /** Teve fala curta (uma palavra: "pausa", "sim") que não passou do mínimo: no fim do prazo, manda mesmo assim. */
+    private var shortSpeech = false
 
     var maxUtteranceMs = 12000
     var noSpeechTimeoutMs = 5000
@@ -30,35 +42,48 @@ class VoiceActivityDetector(var silenceMs: Int, private val frameMs: Int = 100) 
     fun startAfterSpeech() {
         start()
         speechStarted = true
+        speechMs = minSpeechMs
     }
 
-    fun start() {
+    /** @param ignoreFirstMs quadros iniciais que não contam como fala (o bipe tocando no alto-falante). */
+    fun start(ignoreFirstMs: Int = 0) {
         speechStarted = false
         silenceAcc = 0
         elapsed = 0
         speechFrames = 0
+        speechMs = 0
+        ignoreMs = ignoreFirstMs
+        shortSpeech = false
     }
 
     fun process(rms: Double): Result {
         elapsed += frameMs
         val threshold = max(noiseFloor * 2.8, 350.0)
-        if (rms > threshold) {
+        if (rms > threshold && elapsed > ignoreMs) {
             speechFrames++
+            speechMs += frameMs
             if (speechFrames >= 2) speechStarted = true
             silenceAcc = 0
         } else {
             speechFrames = 0
             if (speechStarted) silenceAcc += frameMs
         }
+        if (speechStarted && silenceAcc >= silenceMs && speechMs < minSpeechMs) {
+            // foi um ruído curto, não um comando: continua esperando a pessoa falar
+            speechStarted = false
+            speechMs = 0
+            silenceAcc = 0
+            shortSpeech = true
+        }
         return when {
             speechStarted && silenceAcc >= silenceMs -> Result.END_OF_SPEECH
-            !speechStarted && elapsed >= noSpeechTimeoutMs -> Result.NO_SPEECH
+            !speechStarted && elapsed >= noSpeechTimeoutMs -> if (shortSpeech) Result.END_OF_SPEECH else Result.NO_SPEECH
             elapsed >= maxUtteranceMs -> Result.MAX_LENGTH
             else -> Result.CONTINUE
         }
     }
 
-    val heardSpeech: Boolean get() = speechStarted
+    val heardSpeech: Boolean get() = speechStarted || shortSpeech
 
     companion object {
         fun rms(buf: ShortArray, n: Int): Double {
