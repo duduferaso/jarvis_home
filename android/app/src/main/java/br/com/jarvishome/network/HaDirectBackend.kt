@@ -396,7 +396,14 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                         val api = HomeApi(backend.base, backend.token)
                         val states = api.states()
                         val entity = br.com.jarvishome.home.Forecast.findEntity(states)
-                        if (entity == null) "Não encontrei uma entidade de clima no Home Assistant."
+                        if (entity == null) {
+                            val seen = (0 until states.length()).mapNotNull { states.optJSONObject(it) }
+                                .filter { it.optString("entity_id").startsWith("weather.") }
+                                .joinToString { it.optString("entity_id") + "=" + it.optString("state") }
+                            JLog.w("Previsão: nenhuma entidade weather.* disponível (vistas: ${seen.ifEmpty { "nenhuma" }})")
+                            if (seen.isEmpty()) "Não tem nenhuma entidade de clima no Home Assistant. Adicione a integração Met.no, que é gratuita."
+                            else "O clima do Home Assistant está indisponível agora."
+                        }
                         else {
                             val days = if (q.ask is br.com.jarvishome.home.Forecast.Ask.Now) try {
                                 br.com.jarvishome.home.Forecast.fetch(api, entity)
@@ -455,6 +462,8 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 text = fixed
             }
             if (text.isBlank()) {
+                // registra o que o Whisper devolveu (no histórico aparecia "(nada)" mesmo quando veio "Reitone.")
+                if (heard.isNotBlank()) onEvent(JSONObject().put("type", "transcription").put("text", "").put("heard", heard))
                 onEvent(error(if (heard.isBlank()) "stt-no-text-recognized" else "only-wake-word",
                     "Não ouvi um comando"))
                 return

@@ -153,7 +153,7 @@ fun main() {
 
     println("4) Ouviu só \"Jarvis\"")
     val e4 = session(HaDirectBackend(base, "HA_FAKE", "so_jarvis", wakeNames = wake), 2)
-    ok(e4.size == 1 && e4[0].optString("code") == "only-wake-word", "pede o comando de novo (only-wake-word)")
+    ok(e4.last().optString("code") == "only-wake-word" && e4.any { it.optString("heard").isNotBlank() }, "pede o comando de novo (only-wake-word) e registra o que ouviu")
 
     println("5) Token errado / cancelamento / pipeline quebrada")
     ok(session(HaDirectBackend(base, "errado", ""), 1).let { it.size == 1 && it[0].optString("code") == "unauthorized" }, "token errado → unauthorized")
