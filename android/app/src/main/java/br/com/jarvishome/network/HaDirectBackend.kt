@@ -45,7 +45,9 @@ class HaDirectBackend(
     /** Listas por voz (todo.*): ligado + lista escolhida de compras e de tarefas ("" = escolher sozinho). */
     internal val listsEnabled: Boolean = true,
     internal val shoppingList: String = "",
-    internal val tasksList: String = ""
+    internal val tasksList: String = "",
+    /** Luzes escolhidas em cada cômodo da planta (o mesmo do toque na planta): voz entende "quarto de visita". */
+    internal val floorMap: String = ""
 ) : Backend {
 
     internal val base = baseUrl.trimEnd('/')
@@ -95,6 +97,13 @@ class HaDirectBackend(
             if (conn.responseCode == 200) {
                 val arr = JSONArray(conn.inputStream.bufferedReader().readText())
                 lights = LightCommands.lightsFrom(arr)
+                relays = (0 until arr.length()).mapNotNull { arr.optJSONObject(it) }.filter {
+                    val d = it.optString("entity_id").substringBefore('.'); d == "light" || d == "switch"
+                }.map { st ->
+                    val id = st.optString("entity_id")
+                    br.com.jarvishome.home.FloorPlan.Relay(id, st.optJSONObject("attributes")?.optString("friendly_name")?.ifBlank { id } ?: id,
+                        st.optString("state") == "on", st.optString("state") != "unavailable")
+                }
                 for (i in 0 until arr.length()) {
                     val st = arr.optJSONObject(i) ?: continue
                     val domain = st.optString("entity_id").substringBefore('.')
@@ -219,6 +228,8 @@ class HaDirectBackend(
         @Volatile var vocabularyAt = 0L
         /** Luzes da casa (lidas junto com o vocabulário). */
         @Volatile var lights: List<LightCommands.Light> = emptyList()
+        /** Todos os light.* e switch.* (para os cômodos da planta). */
+        @Volatile var relays: List<br.com.jarvishome.home.FloorPlan.Relay> = emptyList()
         private const val VOCAB_TTL_MS = 30 * 60 * 1000L
         /** Automações/scripts de voz seguem o padrão "Voz: frase". */
         private val VOICE_PREFIX = Regex("^\\s*(voz|comando|jarvis)\\s*[:\\-–]\\s*", RegexOption.IGNORE_CASE)
@@ -528,15 +539,28 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         }
     }
 
+    /** Cômodos da planta com as luzes escolhidas (ou achadas pelo nome), como no toque na planta. */
+    private fun roomsFor(floorMap: String, relays: List<br.com.jarvishome.home.FloorPlan.Relay>): List<LightCommands.Room> {
+        if (relays.isEmpty()) return emptyList()
+        val FP = br.com.jarvishome.home.FloorPlan
+        val map = FP.mapping(FP.decode(floorMap), relays)
+        return FP.zones.mapNotNull { z ->
+            val ids = map[z.id].orEmpty()
+            val ls = relays.filter { it.entityId in ids }.map { LightCommands.Light(it.entityId, it.name) }
+            if (ls.isEmpty()) null else LightCommands.Room(z.id, FP.spokenNames(z.id), ls)
+        }
+    }
+
     private fun handleLight(socket: MiniWebSocket, spoken: String, text: String, heard: String,
                             onEvent: (JSONObject) -> Unit): Boolean {
-        if (HaDirectBackend.lights.isEmpty()) {
+        if (HaDirectBackend.lights.isEmpty() || HaDirectBackend.relays.isEmpty()) {
             try { backend.refreshVocabulary() } catch (e: Exception) { JLog.w("Não li as luzes", e) }
         }
         val lights = HaDirectBackend.lights
-        val fromSpoken = LightCommands.resolve(spoken, lights, backend.trained)
+        val rooms = roomsFor(backend.floorMap, HaDirectBackend.relays)
+        val fromSpoken = LightCommands.resolve(spoken, lights, backend.trained, rooms)
         val action = fromSpoken
-            ?: (if (text != spoken) LightCommands.resolve(text, lights, backend.trained) else null)
+            ?: (if (text != spoken) LightCommands.resolve(text, lights, backend.trained, rooms) else null)
             ?: return false
         val ids = action.lights.map { it.entityId }
         val ok = try {

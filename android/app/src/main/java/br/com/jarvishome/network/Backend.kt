@@ -43,7 +43,8 @@ object Backends {
                 br.com.jarvishome.commands.Learning.asMap(br.com.jarvishome.commands.Learning.decode(prefs.learnedFixes)) else emptyMap(),
             listsEnabled = prefs.listsEnabled,
             shoppingList = prefs.shoppingList,
-            tasksList = prefs.tasksList
+            tasksList = prefs.tasksList,
+            floorMap = prefs.floorMap
         )
         else JarvisApi(prefs)
 }

@@ -70,6 +70,18 @@ object FloorPlan {
 
     // ------------------------------------------------------------------ luzes de cada cômodo
 
+    /** Jeitos de falar cada cômodo por voz (o primeiro é o nome usado na resposta). */
+    fun spokenNames(zoneId: String): List<String> = when (zoneId) {
+        "estar" -> listOf("sala de estar", "estar", "sala estar")
+        "jantar" -> listOf("sala de jantar", "jantar")
+        "cozinha" -> listOf("cozinha", "área de serviço", "serviço", "lavanderia", "cozinha e serviço")
+        "banheiro" -> listOf("banheiro", "banho", "lavabo", "wc")
+        "quarto1" -> listOf("quarto de casal", "quarto 1", "quarto um", "quarto do casal", "suíte", "quarto principal")
+        "quarto2" -> listOf("quarto de visita", "quarto 2", "quarto dois", "quarto de visitas", "quarto das visitas",
+            "quarto visita", "quarto de hóspede", "quarto de hóspedes", "quarto dos hóspedes", "visita", "visitas", "hóspedes", "escritório")
+        else -> emptyList()
+    }
+
     class Relay(val entityId: String, val name: String, val on: Boolean, val available: Boolean)
 
     private fun norm(s: String) = br.com.jarvishome.network.TextCorrector.normalize(s)

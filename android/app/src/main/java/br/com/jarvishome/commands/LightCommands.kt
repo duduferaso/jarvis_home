@@ -18,7 +18,13 @@ object LightCommands {
 
     data class Light(val entityId: String, val name: String)
     data class Trained(val heard: String, val on: Boolean, val target: String)
-    class Action(val on: Boolean, val lights: List<Light>, val all: Boolean, val how: String)
+    class Action(val on: Boolean, val lights: List<Light>, val all: Boolean, val how: String, val place: String? = null)
+
+    /**
+     * Cômodo da planta com as luzes escolhidas nele (as mesmas do toque na planta 2D/3D).
+     * [aliases]: jeitos de falar ("quarto de visita", "quarto 2"…); o primeiro é o nome falado na resposta.
+     */
+    class Room(val id: String, val aliases: List<String>, val lights: List<Light>)
 
     const val ALL = "*"
 
@@ -109,10 +115,11 @@ object LightCommands {
     }
 
     /** Entende a frase como comando de luz pelas palavras (sem treino). */
-    private fun parse(text: String, lights: List<Light>): Action? {
+    private fun parse(text: String, lights: List<Light>, rooms: List<Room> = emptyList()): Action? {
         val w = words(text)
         if (w.isEmpty() || lights.isEmpty()) return null
-        if (w.any { STATE_WORDS.matches(it) || it.any(Char::isDigit) || it == "porcento" || it == "cento" }) return null
+        val roomNumber = { i: Int -> i > 0 && w[i - 1] == "quarto" && w[i].length == 1 && w[i][0].isDigit() }
+        if (w.indices.any { i -> val it = w[i]; STATE_WORDS.matches(it) || (it.any(Char::isDigit) && !roomNumber(i)) || it == "porcento" || it == "cento" }) return null
         var pol: P? = null
         var pIdx = -1
         var i = 0
@@ -144,8 +151,54 @@ object LightCommands {
         }
         if (cur.isNotEmpty()) groups.add(cur)
         if (groups.isEmpty()) return if (lights.size == 1 && hasLightWord) Action(on, lights, false, "frase") else null
-        val found = groups.map { findLight(it, lights) ?: return null }.distinct()
-        return Action(on, found, false, "frase")
+        // cada parte: primeiro a luz pelo nome do Home Assistant; senão, o cômodo da planta
+        val found = ArrayList<Light>()
+        var place: String? = null
+        var viaRoom = false
+        for (g in groups) {
+            val l = findLight(g, lights)
+            // a luz só vence se o nome dela cobre todas as palavras ditas ("quarto 2" não é "Luz do Quarto")
+            val covers = l != null && g.all { w -> keyOf(l).any { tokenMatch(w, it) } }
+            val room = if (covers) null else findRoom(g, rooms)
+            if (room != null) {
+                found.addAll(room.first.lights); viaRoom = true
+                place = if (groups.size == 1) room.second else null
+                continue
+            }
+            found.add(l ?: return null)
+        }
+        return Action(on, found.distinctBy { it.entityId }, false, if (viaRoom) "planta" else "frase", place)
+    }
+
+    private val NUMBER_WORDS = mapOf("um" to "1", "dois" to "2", "tres" to "3", "1" to "1", "2" to "2", "3" to "3")
+
+    private fun roomKey(s: String): List<String> = words(s).filter { it !in STOP }.map { NUMBER_WORDS[it] ?: it }
+
+    /** Cômodo cujo nome falado é o grupo de palavras (tolerando um erro do Whisper: "quatro de visita"). */
+    private fun findRoom(group: List<String>, rooms: List<Room>): Pair<Room, String>? {
+        if (group.isEmpty()) return null
+        val g = group.map { NUMBER_WORDS[it] ?: it }
+        val gj = g.joinToString(" ")
+        var best: Triple<Room, String, Double>? = null
+        for (r in rooms) {
+            if (r.lights.isEmpty()) continue
+            for (a in r.aliases) {
+                val k = roomKey(a)
+                if (k.isEmpty()) continue
+                val kj = k.joinToString(" ")
+                val s = when {
+                    kj == gj -> 1.0
+                    k.size == g.size && k.zip(g).all { (x, y) -> x == y || (x.length >= 4 && ratio(x, y) >= 0.75) } -> 0.92
+                    else -> 0.0
+                }
+                if (s > 0 && (best == null || s > best.third)) best = Triple(r, a, s)
+            }
+        }
+        val b = best ?: return null
+        // dois cômodos diferentes servindo igual = ambíguo
+        if (rooms.any { r -> r !== b.first && r.lights.isNotEmpty() && r.aliases.any { roomKey(it).joinToString(" ") == gj } } && b.third < 1.0) return null
+        val said = if (roomKey(b.second).firstOrNull() in setOf("quarto", "sala", "cozinha", "banheiro")) b.second else b.first.aliases.first()
+        return b.first to said
     }
 
     /** Exemplo treinado mais parecido (só vale se não houver outro comando quase igual). */
@@ -171,9 +224,9 @@ object LightCommands {
     private fun same(a: Action, b: Action) = a.on == b.on && a.all == b.all && a.lights.map { it.entityId }.toSet() == b.lights.map { it.entityId }.toSet()
 
     /** O comando de luz desta frase, ou null para deixar com o Home Assistant. */
-    fun resolve(text: String, lights: List<Light>, trained: List<Trained> = emptyList()): Action? {
-        if (lights.isEmpty()) return null
-        val parsed = parse(text, lights)
+    fun resolve(text: String, lights: List<Light>, trained: List<Trained> = emptyList(), rooms: List<Room> = emptyList()): Action? {
+        if (lights.isEmpty() && rooms.none { it.lights.isNotEmpty() }) return null
+        val parsed = parse(text, lights, rooms)
         val learned = fromTrained(text, lights, trained)
         return when {
             learned == null -> parsed
@@ -190,6 +243,11 @@ object LightCommands {
 
     fun speech(a: Action): String {
         if (a.all) return if (a.on) "Todas as luzes ligadas." else "Todas as luzes desligadas."
+        if (a.place != null) {
+            val p = a.place
+            val art = if (TextCorrector.normalize(p).let { it.startsWith("sala") || it.startsWith("cozinha") || it.startsWith("area") || it.startsWith("suite") || it.startsWith("lavanderia") }) "da" else "do"
+            return "Luz $art $p " + (if (a.on) "ligada." else "desligada.") + if (a.lights.size > 1) " (${a.lights.size} luzes)" else ""
+        }
         val l = a.lights
         if (l.size == 1) {
             val n = l[0].name
