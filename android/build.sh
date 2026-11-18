@@ -4,7 +4,6 @@
 # Requisitos (Debian/Ubuntu):
 #   apt install openjdk-21-jdk-headless aapt dalvik-exchange zipalign apksigner
 #   Kotlin 1.9.25 (github.com/JetBrains/kotlin/releases): o 2.x quebra o app (ver passo 2/6)
-#   Kotlin 2.1.21: https://github.com/JetBrains/kotlin/releases/tag/v2.1.21 (kotlin-compiler-2.1.21.zip)
 #   android.jar API 33: https://github.com/Sable/android-platforms (android-33/android.jar)
 #
 # Uso:  ANDROID_JAR=~/sdk/android-33.jar KOTLINC=~/kotlinc/bin/kotlinc ./build.sh
