@@ -181,6 +181,26 @@ object Dtw {
     }
 }
 
+/**
+ * Chamada no FIM de um trecho de fala ("…[TV/conversa] Hey Tony" sem pausa antes): compara os últimos
+ * 1,9 s com os exemplos de trás para frente (o fim do exemplo encaixa no fim do trecho).
+ */
+object SegmentEnd {
+    const val WINDOW = 30400          // 1,9 s
+    const val STRICT = 0.95f          // um pouco mais exigente que a chamada no começo
+
+    fun score(set: TemplateSet, trainedCount: Int, samples: FloatArray): TemplateSet.Score {
+        val win = samples.copyOfRange(maxOf(0, samples.size - WINDOW), samples.size) + FloatArray(2400)
+        val rf = VoiceFeatures.compute(win).frames.reversedArray()
+        var best = TemplateSet.Score(Float.MAX_VALUE, 0)
+        for (i in 0 until minOf(trainedCount, set.templates.size)) {
+            val m = Dtw.prefix(set.templates[i].reversedArray(), rf)
+            if (m.distance < best.distance) best = TemplateSet.Score(m.distance, m.endFrame, i)
+        }
+        return best
+    }
+}
+
 /** Exemplos de voz + limiar. Formato binário simples, versionado. */
 class TemplateSet(val templates: MutableList<Array<FloatArray>>, var threshold: Float) {
 

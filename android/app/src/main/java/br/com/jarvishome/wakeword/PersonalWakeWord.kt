@@ -108,10 +108,19 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
             val crop = pre + samples.copyOf(min(samples.size, CROP))
             val feats = VoiceFeatures.compute(crop)
             // treinados por vocês: limiar normal; aprendidos no uso: mais exigentes (evita ativar sozinho)
-            val trained = set.score(feats.frames, to = trainedCount)
+            var trained = set.score(feats.frames, to = trainedCount)
             val learned = if (set.templates.size > trainedCount) set.score(feats.frames, from = trainedCount) else null
             val limit = set.threshold * strictness
             val viaLearned = trained.distance > limit && learned != null && learned.distance <= limit * LEARNED_STRICT
+            // Chamada no FIM da fala: alguém/TV falando logo antes (menos de 0,3 s de pausa) faz o VAD juntar
+            // tudo num trecho só, e o "Hey Tony" não fica no começo. Medido nas gravações da casa:
+            // 0/13 → 11/13 reconhecidas com fala emendada antes, 0 disparos falsos em 105 trechos.
+            var atEnd = false
+            if (!viaLearned && trained.distance > limit && samples.size > CROP) {
+                val best = SegmentEnd.score(set, trainedCount, samples)
+                if (best.distance <= limit * SegmentEnd.STRICT) { trained = best; atEnd = true }
+                else if (best.distance < trained.distance) trained = TemplateSet.Score(best.distance, 0, best.index)
+            }
             val score = if (viaLearned) learned!! else trained
             lastDistance = score.distance
             // registro para entender quando a chamada não pega (ex.: TV falando junto)
@@ -123,15 +132,16 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
                 JLog.i(String.format(java.util.Locale.US, "Chamada não reconhecida: distância %.3f (limiar %.3f), fala de %.1f s%s",
                     score.distance, set.threshold, secs, if (secs > 3f) " — fala longa: barulho/TV junto?" else ""))
             }
-            if (score.distance <= limit && (viaLearned || score === trained)) {
-                val endFrame = if (score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
-                val wakeEndInSeg = max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)
+            if (score.distance <= limit && (viaLearned || score === trained) && (atEnd || score.endFrame > 0 || viaLearned)) {
+                val endFrame = if (!atEnd && score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
+                // no fim da fala: a chamada termina junto com o trecho (o comando vem depois da pausa)
+                val wakeEndInSeg = if (atEnd) samples.size else max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)
                 val command = if (wakeEndInSeg < samples.size) samples.copyOfRange(wakeEndInSeg, samples.size) else FloatArray(0)
                 val after = range(segStart + samples.size, total)
                 // só a parte do "Hey Tony" (até onde encaixou no exemplo), recalculada sozinha
                 val learn = try {
                     // só aprende chamadas claras, pegas pelos exemplos de vocês (não por um aprendido)
-                    if (!viaLearned && endFrame > 0 && score.distance > set.threshold * 0.3f &&
+                    if (!viaLearned && !atEnd && endFrame > 0 && score.distance > set.threshold * 0.3f &&
                         score.distance <= set.threshold * 0.9f) {
                         val endSample = min(crop.size, endFrame * VoiceFeatures.HOP + 1600)
                         VoiceFeatures.compute(crop.copyOf(endSample)).frames.takeIf { it.size >= 15 }
@@ -139,13 +149,18 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
                 } catch (e: Exception) { null }
                 // Antes: qualquer barulho até 20 dB abaixo da voz (TV, ventilador, o fim do próprio "Tony")
                 // contava como "já começou o comando" → ia direto para "Pensando…" e só depois abria o microfone.
-                val wakePeak = peakDb(if (wakeEndInSeg in 1 until samples.size) samples.copyOf(wakeEndInSeg) else samples)
+                val wakePeak = peakDb(when {
+                    atEnd -> samples.copyOfRange(maxOf(0, samples.size - CROP), samples.size)
+                    wakeEndInSeg in 1 until samples.size -> samples.copyOf(wakeEndInSeg)
+                    else -> samples
+                })
                 val cmdPeak = peakDb(command)
                 val oneBreath = command.size >= ONE_BREATH_MIN && cmdPeak > wakePeak - BREATH_DB
                 val speechAfter = !oneBreath && vad.isSpeechDetected() && peakDb(after) > wakePeak - BREATH_DB
                 JLog.i(String.format(java.util.Locale.US, "Chamada: distância %.3f · depois dela %.2f s (%.0f dB vs %.0f dB) → %s",
                     score.distance, command.size / 16000f, cmdPeak, wakePeak,
-                    if (oneBreath) "frase única" else if (speechAfter) "já falando" else "abre o microfone"))
+                    if (oneBreath) "frase única" else if (speechAfter) "já falando" else "abre o microfone") +
+                    if (atEnd) " · chamada no fim da fala (alguém/TV falando antes)" else "")
                 trigger = Trigger(score.distance, command, after, pre.copyOfRange(maxOf(0, pre.size - 1600), pre.size) + samples,
                     speechAfter, learn,
                     if (viaLearned) set.templates[score.index] else null).also { it.oneBreath = oneBreath }
@@ -179,7 +194,7 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
     companion object {
         private const val RING = 16000 * 6
         private const val PREROLL = 2400            // 0,15 s antes da fala (igual ao treino)
-        private const val CROP = 35200              // 2,2 s analisados
+        private const val CROP = SegmentEnd.WINDOW              // 1,9 s analisados (2,2 s misturava mais o comando emendado)
         private const val MIN_SEGMENT = 5600        // 0,35 s
         private const val ONE_BREATH_MIN = 11200    // 0,7 s de fala depois da chamada ("Tonyyy" arrastado não conta)
         private const val BREATH_DB = 12.0          // o comando tem de ser fala de verdade, não barulho de fundo

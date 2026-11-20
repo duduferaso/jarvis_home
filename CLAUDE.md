@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.3**, com versionCode 44.
+O app é este repositório. A versão atual é a **1.15.4**, com versionCode 45.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -69,6 +69,7 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
   - **"frase única"** ("Hey Tony, liga a luz"): pelo menos 0,7 s de fala com volume perto do da chamada. O áudio da chamada vai junto para o Whisper.
   - **"abre o microfone"**: toca o bipe e só o que vier depois vai para o Whisper.
   - Nunca mande a chamada + pausa + comando juntos: o Whisper devolve só a chamada. Isso causou o bug do "bipe duplo", corrigido na 1.15.2.
+- **Chamada no fim da fala:** se alguém ou a TV falava logo antes (menos de 0,3 s de pausa), o Silero junta tudo num trecho e o "Hey Tony" não fica no começo. Por isso, trechos maiores que 1,9 s também são comparados pelo fim (`SegmentEnd`, exemplos de trás para frente, limite ×0,95). Nas gravações da casa isso passou de 0/13 para 12/13, sem disparos falsos (`tests/jvm_pessoal/ChamadaEmendadaTest.kt`, com as gravações fora do repositório).
 - **`VoiceActivityDetector`** é um VAD de energia:
   - ignora os primeiros 300 ms quando toca o bipe;
   - exige 300 ms de fala para começar;
