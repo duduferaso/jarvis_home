@@ -1,0 +1,8 @@
+{
+  "versionCode": 45,
+  "versionName": "1.15.4",
+  "notes": "Chamada “Hey Tony” mais confiável: agora reconhece também quando alguém ou a TV estava falando logo antes (antes falhava quase sempre nesse caso).",
+  "apk": "JarvisHome-1.15.4-45.apk",
+  "size": 9610398,
+  "sha256": "f9e7c8ac9fa0f39a98f658bd8ba8249ea3ae9ad9f81191285f978495ffcb624d"
+}
