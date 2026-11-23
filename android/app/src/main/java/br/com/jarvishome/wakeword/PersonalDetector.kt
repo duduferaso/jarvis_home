@@ -201,6 +201,23 @@ object SegmentEnd {
     }
 }
 
+/**
+ * Recorte de uma gravação do treino igual ao que o detector vê ao vivo: 0,15 s antes + só o trecho de fala
+ * (o maior que o Silero achou), até 1,9 s. Antes o exemplo era a gravação inteira de 2,4 s: com TV ou barulho,
+ * o exemplo carregava o som de fundo e quase não servia (medido: 0,15–0,21 recortado vs 0,27–0,34 inteiro).
+ */
+object TakeTrim {
+    const val PRE = 2400
+
+    fun cut(take: FloatArray, segments: List<Pair<Int, FloatArray>>): FloatArray {
+        val best = segments.filter { it.second.size >= 4000 }.maxByOrNull { it.second.size } ?: return take
+        val start = best.first.coerceIn(0, take.size)
+        val pre = take.copyOfRange(maxOf(0, start - PRE), start)
+        val pad = if (pre.size < PRE) FloatArray(PRE - pre.size) else FloatArray(0)
+        return pad + pre + best.second.copyOf(minOf(best.second.size, SegmentEnd.WINDOW))
+    }
+}
+
 /** Exemplos de voz + limiar. Formato binário simples, versionado. */
 class TemplateSet(val templates: MutableList<Array<FloatArray>>, var threshold: Float) {
 

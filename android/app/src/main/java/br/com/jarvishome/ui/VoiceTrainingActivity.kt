@@ -21,6 +21,8 @@ import br.com.jarvishome.service.JarvisForegroundService
 import br.com.jarvishome.settings.Prefs
 import br.com.jarvishome.wakeword.PersonalStore
 import br.com.jarvishome.wakeword.PersonalTrainer
+import br.com.jarvishome.wakeword.SegmentEnd
+import br.com.jarvishome.wakeword.TakeTrim
 import br.com.jarvishome.wakeword.TemplateSet
 import br.com.jarvishome.wakeword.VoiceFeatures
 import java.util.Locale
@@ -214,15 +216,31 @@ class VoiceTrainingActivity : Activity() {
             }
             val set = if (keepExisting) PersonalStore.load(this) else TemplateSet(ArrayList(), TemplateSet.DEFAULT_THRESHOLD)
             val firstNew = set.templates.size
-            for (t in takes) set.templates.add(VoiceFeatures.compute(t).frames)
+            // cada gravação recortada como o detector recorta ao vivo (Silero, mesma configuração)
+            val vad = try { trainingVad() } catch (e: Throwable) { JLog.w("VAD do treino indisponível", e); null }
+            for (t in takes) {
+                val cut = if (vad == null) t else try {
+                    vad.reset()
+                    var i = 0
+                    while (i < t.size) { vad.acceptWaveform(t.copyOfRange(i, minOf(t.size, i + 1600))); i += 1600 }
+                    vad.acceptWaveform(FloatArray(8000)) // silêncio no fim para fechar o trecho
+                    vad.flush()
+                    val segs = ArrayList<Pair<Int, FloatArray>>()
+                    while (!vad.empty()) { val s = vad.front(); segs.add(s.start to s.samples); vad.pop() }
+                    TakeTrim.cut(t, segs)
+                } catch (e: Throwable) { t }
+                set.templates.add(VoiceFeatures.compute(cut).frames)
+            }
+            try { vad?.release() } catch (_: Throwable) {}
             val newIdx = (firstNew until set.templates.size).toList()
             // fala normal: janelas de 2,2 s a cada 1,1 s (igual ao que o detector analisa)
             val negatives = ArrayList<Array<FloatArray>>()
             val all = speech.fold(FloatArray(0)) { acc, a -> acc + a }
             var st = 0
-            while (st + 35200 <= all.size) {
-                negatives.add(VoiceFeatures.compute(all.copyOfRange(st, st + 35200)).frames)
-                st += 17600
+            val win = SegmentEnd.WINDOW + TakeTrim.PRE // o mesmo tamanho que o detector analisa
+            while (st + win <= all.size) {
+                negatives.add(VoiceFeatures.compute(all.copyOfRange(st, st + win)).frames)
+                st += win / 2
             }
             ui { level.progress = 60 }
             val rep = PersonalTrainer.choose(set, newIdx, negatives)
@@ -292,6 +310,14 @@ class VoiceTrainingActivity : Activity() {
         JarvisForegroundService.send(this, JarvisForegroundService.ACTION_RELOAD)
         super.onDestroy()
     }
+
+    private fun trainingVad() = com.k2fsa.sherpa.onnx.Vad(
+        assets,
+        com.k2fsa.sherpa.onnx.VadModelConfig(
+            sileroVadModelConfig = com.k2fsa.sherpa.onnx.SileroVadModelConfig(
+                model = "personal/silero_vad.onnx", threshold = 0.4f, minSilenceDuration = 0.3f,
+                minSpeechDuration = 0.25f, windowSize = 512, maxSpeechDuration = 8f),
+            sampleRate = VoiceFeatures.SAMPLE_RATE, numThreads = 1, provider = "cpu"))
 
     companion object {
         private const val TAKES = 6
