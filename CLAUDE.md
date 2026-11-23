@@ -160,5 +160,7 @@ ANDROID_JAR=... KOTLINC=... tools/publicar_versao.sh
 - **Ideias oferecidas e ainda não feitas:**
   - rotinas "bom dia" e "boa noite" (com conferência da casa antes de dormir);
   - reconhecer quem está falando (o detector já sabe de qual pessoa é o exemplo);
-  - perguntas gerais via agente de IA no HA.
+  - perguntas gerais via agente de IA no HA;
+  - atualização sem confirmação via modo Device Owner (Android 11 não permite atualização silenciosa de outro jeito). O usuário adiou: foco em funções e qualidade;
+  - treino de comandos: quando o exemplo que bateu não tem "liga"/"desliga" (ex.: "Obrigada, Jesus, da cozinha"), inverter o estado atual da luz em vez de seguir o treino.
 - **Documentação de uso** (configurações e comandos de voz): https://claude.ai/artifact/Rmkm3Jj6MtwPUhyChhESV3
