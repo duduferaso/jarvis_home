@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.6**, com versionCode 47.
+O app é este repositório. A versão atual é a **1.15.7**, com versionCode 48.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -70,7 +70,7 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
   - **"abre o microfone"**: toca o bipe e só o que vier depois vai para o Whisper.
   - Nunca mande a chamada + pausa + comando juntos: o Whisper devolve só a chamada. Isso causou o bug do "bipe duplo", corrigido na 1.15.2.
 - **Chamada no fim da fala:** se alguém ou a TV falava logo antes (menos de 0,3 s de pausa), o Silero junta tudo num trecho e o "Hey Tony" não fica no começo. Por isso, trechos maiores que 1,9 s também são comparados pelo fim (`SegmentEnd`, exemplos de trás para frente, limite ×0,95). Nas gravações da casa isso passou de 0/13 para 12/13, sem disparos falsos (`tests/jvm_pessoal/ChamadaEmendadaTest.kt`, com as gravações fora do repositório).
-- **Treino de voz** (`VoiceTrainingActivity`): cada gravação de 2,4 s é recortada pelo Silero como ao vivo (`TakeTrim`: 0,15 s antes + o maior trecho de fala, até 1,9 s). Sem isso, treinar longe ou com TV gerava exemplos cheios de fundo. Treinar no lugar e no barulho em que a pessoa chama é o que mais melhora a chamada difícil: na simulação de 3 m com TV, a distância caiu de ~0,20–0,25 para ~0,08–0,19.
+- **Treino de voz** (`VoiceTrainingActivity`): cada gravação de 2,4 s é recortada pelo Silero como ao vivo (`TakeTrim`: 0,15 s antes + o maior trecho de fala, até 1,9 s). Sem isso, treinar longe ou com TV gerava exemplos cheios de fundo. Treinar no lugar e no barulho em que a pessoa chama é o que mais melhora a chamada difícil: na simulação de 3 m com TV, a distância caiu de ~0,20–0,25 para ~0,08–0,19. O limiar automático (`PersonalTrainer.choose`) fica 0,03 abaixo da fala/TV mais parecida e **no máximo 0,20**: até a 1.15.6 ele ia a ~0,22 treinando com TV (0,01 de folga) e o app passou a ativar sozinho.
 - **`VoiceActivityDetector`** é um VAD de energia:
   - ignora os primeiros 300 ms quando toca o bipe;
   - exige 300 ms de fala para começar;

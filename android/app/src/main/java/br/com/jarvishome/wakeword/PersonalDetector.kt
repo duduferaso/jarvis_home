@@ -269,6 +269,10 @@ class TemplateSet(val templates: MutableList<Array<FloatArray>>, var threshold: 
  * ("deixa um de fora") contra a distância da fala normal da casa.
  */
 object PersonalTrainer {
+    const val MARGIN = 0.03f
+    /** Limiar máximo escolhido automaticamente (nas gravações da casa a fala/TV mais parecida fica em ~0,22–0,25). */
+    const val MAX_AUTO = 0.20f
+
     class Report(val threshold: Float, val recognized: Int, val total: Int, val falseHits: Int, val worstPositive: Float, val bestNegative: Float)
 
     fun choose(set: TemplateSet, newIndices: List<Int>, negatives: List<Array<FloatArray>>): Report {
@@ -278,8 +282,10 @@ object PersonalTrainer {
         val neg = negatives.map { set.score(it).distance }
         val worstPos = pos.maxOrNull() ?: TemplateSet.DEFAULT_THRESHOLD
         val bestNeg = neg.minOrNull() ?: 1f
-        val thr = if (worstPos < bestNeg) ((worstPos + bestNeg) / 2f).coerceIn(0.16f, 0.26f)
-                  else (bestNeg - 0.01f).coerceIn(0.12f, 0.26f)   // prioriza não disparar sozinho
+        // Folga de 0,03 abaixo da fala/TV mais parecida e no máximo 0,20. Antes: meio-termo até 0,26 ou
+        // 0,01 abaixo da TV — treinando longe com TV o limiar ia a ~0,22 e passou a ativar sozinho.
+        val safe = bestNeg - MARGIN
+        val thr = (if (worstPos < safe) minOf((worstPos + bestNeg) / 2f, safe) else safe).coerceIn(0.14f, MAX_AUTO)
         return Report(thr, pos.count { it <= thr }, pos.size, neg.count { it <= thr }, worstPos, bestNeg)
     }
 }

@@ -122,6 +122,11 @@ class Prefs(context: Context) {
     var learnFromSuccess: Boolean
         get() = sp.getBoolean("learn_from_success", true)
         set(v) = sp.edit().putBoolean("learn_from_success", v).apply()
+    /** 1.15.7: limiar acima de 0,20 posto pelo treino (até 1.15.6) volta para 0,20, uma vez. */
+    var thresholdCapV1: Boolean
+        get() = sp.getBoolean("threshold_cap_v1", false)
+        set(v) = sp.edit().putBoolean("threshold_cap_v1", v).apply()
+
     var learnedResetV2: Boolean
         get() = sp.getBoolean("learned_reset_v2", false)
         set(v) = sp.edit().putBoolean("learned_reset_v2", v).apply()

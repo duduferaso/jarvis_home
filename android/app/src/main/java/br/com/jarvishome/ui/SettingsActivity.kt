@@ -412,8 +412,8 @@ class SettingsActivity : Activity() {
             startActivity(Intent(this, VoiceTrainingActivity::class.java))
             finish()
         }
-        slider("Exigência do detector pessoal", 14, 30, 1, (personalThreshold * 100).toInt(),
-            { v -> String.format(Locale.US, "%.2f", v / 100f) + (if (v >= 25) "  (aceita mais, risco de ativar sozinho)" else if (v <= 17) "  (mais rígido)" else "") }) {
+        slider("Exigência do detector pessoal", 14, 25, 1, (personalThreshold * 100).toInt().coerceIn(14, 25),
+            { v -> String.format(Locale.US, "%.2f", v / 100f) + (if (v >= 21) "  (risco de ativar sozinho com TV)" else if (v <= 17) "  (mais rígido)" else "") }) {
             personalThreshold = it / 100f
         }
         note("Valor maior = aciona com mais facilidade. Se não atender a primeira chamada, suba 0,01 por vez; " +

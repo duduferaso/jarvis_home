@@ -243,7 +243,7 @@ class VoiceTrainingActivity : Activity() {
                 st += win / 2
             }
             ui { level.progress = 60 }
-            val rep = PersonalTrainer.choose(set, newIdx, negatives)
+            val rep = PersonalTrainer.choose(set, newIdx, negatives) // já com folga da TV/fala e no máximo 0,20
             set.threshold = rep.threshold
             pending = set
             JLog.i("Treino de voz: ${rep.recognized}/${rep.total}, falsos ${rep.falseHits}, limiar " +

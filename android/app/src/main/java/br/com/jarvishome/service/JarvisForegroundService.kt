@@ -560,6 +560,19 @@ class JarvisForegroundService : Service() {
                     prefs.learnedResetV2 = true
                     JLog.i("Chamadas aprendidas na 1.12.0 descartadas (regras novas, mais rígidas)")
                 }
+                if (!prefs.thresholdCapV1) {
+                    // o treino até a 1.15.6 subia o limiar para até 0,26 (com TV, ~0,22): ativava sozinho
+                    prefs.thresholdCapV1 = true
+                    if (PersonalStore.hasCustom(this)) {
+                        val s = PersonalStore.load(this)
+                        if (s.threshold > br.com.jarvishome.wakeword.PersonalTrainer.MAX_AUTO) {
+                            JLog.i(String.format(Locale.US, "Limiar %.3f (posto pelo treino) → %.2f: estava ativando sozinho",
+                                s.threshold, br.com.jarvishome.wakeword.PersonalTrainer.MAX_AUTO))
+                            s.threshold = br.com.jarvishome.wakeword.PersonalTrainer.MAX_AUTO
+                            PersonalStore.save(this, s)
+                        }
+                    }
+                }
                 val trainedCount = PersonalStore.load(this).templates.size
                 val set = PersonalStore.loadForDetection(this)
                 val learned = set.templates.size - trainedCount
