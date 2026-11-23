@@ -293,6 +293,8 @@ async def ws(request):
 
         if text.lower().startswith("jarvis") or "zoquart" in text or " da." in text:
             rtype, speech = "error", "Desculpe, não entendi"
+        elif "?" in text or "quanto" in text.lower():
+            rtype, speech = "query_answer", "Faltam dez minutos"  # pergunta: o HA responde, não executa
         elif "quarto" in text:
             rtype, speech = "action_done", "Luz do quarto ligada"
         else:

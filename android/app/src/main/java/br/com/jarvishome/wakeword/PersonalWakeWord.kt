@@ -107,21 +107,13 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
             val pre = range(segStart - PREROLL, segStart)
             val crop = pre + samples.copyOf(min(samples.size, CROP))
             val feats = VoiceFeatures.compute(crop)
-            // treinados por vocês: limiar normal; aprendidos no uso: mais exigentes (evita ativar sozinho)
-            var trained = set.score(feats.frames, to = trainedCount)
-            val learned = if (set.templates.size > trainedCount) set.score(feats.frames, from = trainedCount) else null
+            // treinados por vocês: limiar normal; aprendidos no uso: mais exigentes (evita ativar sozinho).
+            // Chamada no FIM da fala (alguém/TV falando logo antes): ver SegmentEnd. Decisão em WakeMatch.
             val limit = set.threshold * strictness
-            val viaLearned = trained.distance > limit && learned != null && learned.distance <= limit * LEARNED_STRICT
-            // Chamada no FIM da fala: alguém/TV falando logo antes (menos de 0,3 s de pausa) faz o VAD juntar
-            // tudo num trecho só, e o "Hey Tony" não fica no começo. Medido nas gravações da casa:
-            // 0/13 → 11/13 reconhecidas com fala emendada antes, 0 disparos falsos em 105 trechos.
-            var atEnd = false
-            if (!viaLearned && trained.distance > limit && samples.size > CROP) {
-                val best = SegmentEnd.score(set, trainedCount, samples)
-                if (best.distance <= limit * SegmentEnd.STRICT) { trained = best; atEnd = true }
-                else if (best.distance < trained.distance) trained = TemplateSet.Score(best.distance, 0, best.index)
-            }
-            val score = if (viaLearned) learned!! else trained
+            val m = WakeMatch.decide(set, trainedCount, limit, feats.frames, samples)
+            val viaLearned = m.viaLearned
+            val atEnd = m.atEnd
+            val score = m.score
             lastDistance = score.distance
             // registro para entender quando a chamada não pega (ex.: TV falando junto)
             val secs = samples.size / 16000f
@@ -132,7 +124,7 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
                 JLog.i(String.format(java.util.Locale.US, "Chamada não reconhecida: distância %.3f (limiar %.3f), fala de %.1f s%s",
                     score.distance, set.threshold, secs, if (secs > 3f) " — fala longa: barulho/TV junto?" else ""))
             }
-            if (score.distance <= limit && (viaLearned || score === trained) && (atEnd || score.endFrame > 0 || viaLearned)) {
+            if (m.hit) {
                 val endFrame = if (!atEnd && score.endFrame in 1..feats.frameIndex.size) feats.frameIndex[score.endFrame - 1] else 0
                 // no fim da fala: a chamada termina junto com o trecho (o comando vem depois da pausa)
                 val wakeEndInSeg = if (atEnd) samples.size else max(0, endFrame * VoiceFeatures.HOP + 400 - pre.size)
@@ -198,7 +190,6 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
         private const val MIN_SEGMENT = 5600        // 0,35 s
         private const val ONE_BREATH_MIN = 11200    // 0,7 s de fala depois da chamada ("Tonyyy" arrastado não conta)
         private const val BREATH_DB = 12.0          // o comando tem de ser fala de verdade, não barulho de fundo
-        private const val LEARNED_STRICT = 0.85f    // exemplo aprendido precisa ser 15% mais parecido
     }
 }
 

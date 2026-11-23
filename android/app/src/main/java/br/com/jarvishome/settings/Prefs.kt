@@ -127,6 +127,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("threshold_cap_v1", false)
         set(v) = sp.edit().putBoolean("threshold_cap_v1", v).apply()
 
+    /** 1.15.10: descarta chamadas aprendidas até aqui (podiam ter aprendido conversa). */
+    var learnedResetV3: Boolean
+        get() = sp.getBoolean("learned_reset_v3", false)
+        set(v) = sp.edit().putBoolean("learned_reset_v3", v).apply()
+
     var learnedResetV2: Boolean
         get() = sp.getBoolean("learned_reset_v2", false)
         set(v) = sp.edit().putBoolean("learned_reset_v2", v).apply()

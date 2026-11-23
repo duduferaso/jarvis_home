@@ -560,6 +560,12 @@ class JarvisForegroundService : Service() {
                     prefs.learnedResetV2 = true
                     JLog.i("Chamadas aprendidas na 1.12.0 descartadas (regras novas, mais rígidas)")
                 }
+                if (!prefs.learnedResetV3) {
+                    // até a 1.15.9 o reforço podia aprender conversa como "Hey Tony" (ver "confirms")
+                    PersonalStore.clearLearned(this)
+                    prefs.learnedResetV3 = true
+                    JLog.i("Chamadas aprendidas no uso descartadas: podiam conter conversa (regra nova de reforço)")
+                }
                 if (!prefs.thresholdCapV1) {
                     // o treino até a 1.15.6 subia o limiar para até 0,26 (com TV, ~0,22): ativava sozinho
                     prefs.thresholdCapV1 = true
@@ -664,6 +670,7 @@ class JarvisForegroundService : Service() {
     private fun runSession(backend: Backend, s: Session) {
         var text = ""
         var responseType = ""
+        var confirms = false
         var audioUrl: String? = null
         var errCode: String? = null
         var errMsg: String? = null
@@ -684,6 +691,7 @@ class JarvisForegroundService : Service() {
                     "response" -> {
                         text = ev.optString("text")
                         responseType = ev.optString("response_type")
+                        confirms = ev.optBoolean("confirms", false)
                         continueConversation = ev.optBoolean("continue_conversation", false)
                     }
                     "audio" -> audioUrl = ev.optString("url")
@@ -723,7 +731,11 @@ class JarvisForegroundService : Service() {
         val byLearned = activatedByLearned
         activatedByLearned = null
         val executed = errCode == null && responseType == "action_done" && local != "aprendizado"
-        if (candidate != null && prefs.learnFromSuccess && executed) learnWake(candidate)
+        // Aprender a chamada só quando uma LUZ/DISPOSITIVO foi acionado de verdade. Antes, qualquer
+        // "action_done" valia: conversa transcrita como "comprei pão" (lista: "não achei"), "quanto falta"
+        // (treino) etc. confirmava uma ativação sozinha e ensinava a conversa como "Hey Tony" — mais
+        // ativações sozinhas a cada vez.
+        if (candidate != null && prefs.learnFromSuccess && executed && confirms) learnWake(candidate)
         // reforço negativo: ativou por um exemplo aprendido e não virou comando → esquece esse exemplo
         if (byLearned != null && !executed && responseType != "query_answer" && code0(errCode) != "only-wake-word") {
             forgetLearned(byLearned)

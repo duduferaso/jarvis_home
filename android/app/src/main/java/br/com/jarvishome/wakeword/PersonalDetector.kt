@@ -202,6 +202,36 @@ object SegmentEnd {
 }
 
 /**
+ * A decisão do detector para um trecho de fala, separada do áudio ao vivo para ser testada na JVM
+ * (tests/jvm_pessoal/ConversaTest.kt). [crop] é o começo do trecho com o pré-roll; [samples], o trecho inteiro.
+ * Exemplos treinados por vocês: limiar normal. Aprendidos no uso (depois de [trainedCount]): 15% mais exigentes.
+ */
+object WakeMatch {
+    const val LEARNED_STRICT = 0.85f
+
+    class Result(val score: TemplateSet.Score, val viaLearned: Boolean, val atEnd: Boolean, val hit: Boolean)
+
+    fun decide(set: TemplateSet, trainedCount: Int, limit: Float, crop: FloatArray, samples: FloatArray): Result =
+        decide(set, trainedCount, limit, VoiceFeatures.compute(crop).frames, samples)
+
+    fun decide(set: TemplateSet, trainedCount: Int, limit: Float, frames: Array<FloatArray>, samples: FloatArray): Result {
+        var trained = set.score(frames, to = trainedCount)
+        val learned = if (set.templates.size > trainedCount) set.score(frames, from = trainedCount) else null
+        val viaLearned = trained.distance > limit && learned != null && learned.distance <= limit * LEARNED_STRICT
+        var atEnd = false
+        // chamada no FIM do trecho (fala/TV emendada antes): só com os exemplos treinados, mais exigente
+        if (!viaLearned && trained.distance > limit && samples.size > SegmentEnd.WINDOW) {
+            val best = SegmentEnd.score(set, trainedCount, samples)
+            if (best.distance <= limit * SegmentEnd.STRICT) { trained = best; atEnd = true }
+            else if (best.distance < trained.distance) trained = TemplateSet.Score(best.distance, 0, best.index)
+        }
+        val score = if (viaLearned) learned!! else trained
+        val hit = score.distance <= limit && (atEnd || score.endFrame > 0 || viaLearned)
+        return Result(score, viaLearned, atEnd, hit)
+    }
+}
+
+/**
  * Recorte de uma gravação do treino igual ao que o detector vê ao vivo: 0,15 s antes + só o trecho de fala
  * (o maior que o Silero achou), até 1,9 s. Antes o exemplo era a gravação inteira de 2,4 s: com TV ou barulho,
  * o exemplo carregava o som de fundo e quase não servia (medido: 0,15–0,21 recortado vs 0,27–0,34 inteiro).

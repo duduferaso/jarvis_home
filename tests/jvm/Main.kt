@@ -192,5 +192,18 @@ fun main() {
     ok(l1.any { it.optString("type") == "audio" }, "responde com a voz do Home Assistant")
     stt(base, "Jarvis, obrigado.")
     ok(session(b, 2).any { it.optString("code") == "only-wake-word" }, "\"Obrigado\" inventado → reabre o microfone")
+    println("7) Reforço: só ação de verdade confirma a chamada (conversa não vira \"Hey Tony\")")
+    stt(base, "Jarvis, comprei banana.")
+    val r1 = session(b, 2).first { it.optString("type") == "response" }
+    ok(r1.optString("response_type") != "action_done" && !r1.optBoolean("confirms"), "\"comprei banana\" (não está na lista) não confirma: ${r1.optString("text")}")
+    stt(base, "Jarvis, quanto falta do treino?")
+    val r2 = session(b, 2).first { it.optString("type") == "response" }
+    ok(!r2.optBoolean("confirms"), "\"quanto falta do treino?\" (pergunta ao HA) não confirma: ${r2.optString("text")}")
+    stt(base, "Jarvis, liga a luz da sala.")
+    val r3 = session(b, 3).first { it.optString("type") == "response" }
+    ok(r3.optBoolean("confirms"), "luz acionada confirma")
+    stt(base, "Jarvis, coloca pão na lista de compras.")
+    val r4 = session(b, 2).first { it.optString("type") == "response" }
+    ok(r4.optString("response_type") == "action_done" && !r4.optBoolean("confirms"), "lista mudou (action_done), mas não serve para aprender a chamada")
     println("TODOS OS TESTES PASSARAM")
 }

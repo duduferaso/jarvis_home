@@ -17,3 +17,10 @@ Resultados com a gravação de 4/11/2026 (2 vozes, 13 chamadas, -34 a -51 dBFS):
 | Modelo em inglês (melhor de 36 grafias × 6 sensibilidades) | 2/13 | 0 |
 | Detector pessoal, tempo real, cada chamada sem o próprio exemplo | 13/13 | 0 em 171 s de fala |
 | Detector pessoal, comando emendado | 12/13 | 0 |
+
+`ConversaTest.kt` (bug de "ativar sozinho" conversando, 1.15.10): roda a decisão real do app (`WakeMatch`:
+começo do trecho, exemplos aprendidos e fim do trecho) com limiar 0,20 sobre os 105 trechos de conversa,
+207 trechos de conversa contínua (2 a 3 falas emendadas), limiar 10% acima (folga), 10 exemplos aprendidos
+de chamadas reais, e confere que as 13 chamadas continuam reconhecidas. Resultado: 0 disparos, menor
+distância da conversa 0,231. Também mostra o mecanismo do bug: um trecho de conversa aprendido como
+chamada dispara de novo, por isso o reforço só aprende com ação confirmada.

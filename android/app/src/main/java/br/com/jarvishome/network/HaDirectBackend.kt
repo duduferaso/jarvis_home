@@ -384,13 +384,16 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
             if (backend.listsEnabled && text.isNotBlank()) {
                 val cmd = Lists.parse(text)
                 if (cmd != null) {
+                    listChanged = false
                     val speech = try { runList(cmd) } catch (e: Exception) {
                         JLog.w("Lista indisponível", e)
                         "Não consegui mexer na ${Lists.listName(cmd.which)} agora."
                     }
                     JLog.i("Lista: “$text” → “$speech”")
                     onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard).put("local", "lista"))
-                    onEvent(JSONObject().put("type", "response").put("text", speech).put("response_type", "action_done")
+                    // "Não achei X na lista" não é ação feita
+                    onEvent(JSONObject().put("type", "response").put("text", speech)
+                        .put("response_type", if (listChanged) "action_done" else "query_answer")
                         .put("continue_conversation", false))
                     val url = try { HaDirectBackend.speakOn(socket, 8, backend.pipelineId, speech) } catch (e: Exception) { null }
                     if (url != null) onEvent(JSONObject().put("type", "audio").put("url", url))
@@ -504,6 +507,9 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         }
     }
 
+    /** A última [runList] mudou alguma lista? */
+    private var listChanged = false
+
     /** Executa um comando de lista no Home Assistant e devolve a frase da resposta. */
     private fun runList(cmd: Lists.Cmd): String {
         val api = HomeApi(backend.base, backend.token)
@@ -519,7 +525,7 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 val added = ArrayList<String>(); val already = ArrayList<String>()
                 for (it in cmd.items) {
                     if (Lists.match(it, items)?.let { m -> Lists.fold(m.summary).trim() == Lists.fold(it).trim() } == true) already.add(it)
-                    else { api.todoAdd(list.entityId, it); added.add(it) }
+                    else { api.todoAdd(list.entityId, it); added.add(it); listChanged = true }
                 }
                 Lists.addSpeech(cmd.which, added, already)
             }
@@ -531,7 +537,7 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                     else {
                         // marca como feito (fica no histórico da lista no Home Assistant)
                         api.todoComplete(list.entityId, m.uid.ifBlank { m.summary })
-                        removed.add(m.summary)
+                        removed.add(m.summary); listChanged = true
                     }
                 }
                 Lists.removeSpeech(cmd.which, removed, missing, cmd.bought)
@@ -590,7 +596,7 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                 else -> ""
             }))
         onEvent(JSONObject().put("type", "response").put("text", speech)
-            .put("response_type", if (ok) "action_done" else "error").put("continue_conversation", false))
+            .put("response_type", if (ok) "action_done" else "error").put("confirms", ok).put("continue_conversation", false))
         if (ok) LightCommands.onSet?.invoke(ids, action.on)
         // deu certo só depois da correção: a frase como foi ouvida passa a valer para essa luz
         if (ok && fromSpoken == null && !resolved.invert && (action.all || action.lights.size == 1)) {
@@ -652,6 +658,8 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
                             }
                             emit(JSONObject().put("type", "response").put("text", speech)
                                 .put("response_type", rtype)
+                                // só ação executada pelo Home Assistant confirma que a chamada era de verdade
+                                .put("confirms", rtype == "action_done")
                                 .put("continue_conversation", out.optBoolean("continue_conversation", false)))
                         }
                         "tts-end" -> {
