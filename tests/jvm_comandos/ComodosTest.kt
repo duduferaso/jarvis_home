@@ -49,4 +49,16 @@ fun main() {
     ok(r("desliga a luz do quarto 2")?.let { LightCommands.speech(it) } == "Luz do quarto 2 desligada.", "resposta: ${r("desliga a luz do quarto 2")?.let { LightCommands.speech(it) }}")
     ok(r("luz da sala em 50%") == null, "porcentagem continua com o Home Assistant")
     println(if (fl == 0) "TODOS OS TESTES PASSARAM" else "$fl FALHA(S)")
+    treinoRelevante()
+}
+
+// treino de comandos: tudo o que foi gravado vale como foi gravado (quem decide apagar é a pessoa)
+fun treinoRelevante() {
+    var fl = 0
+    fun ok(c: Boolean, m: String) { if (!c) fl++; println((if (c) "PASSOU " else "FALHOU ") + m) }
+    val L = listOf(Light("light.luz_da_cozinha", "Luz da Cozinha"), Light("light.luz_da_visita", "Luz da Visita"))
+    val tr = listOf(LightCommands.Trained("Obrigada, Jesus, da cozinha", true, "light.luz_da_cozinha"))
+    val a = LightCommands.resolve("Obrigada, Jesus, da cozinha.", L, tr)
+    ok(a != null && a.on && a.lights.map { it.entityId } == listOf("light.luz_da_cozinha"), "\"Obrigada, Jesus, da cozinha\" (longe, com TV) liga a cozinha")
+    println(if (fl == 0) "TODOS OS TESTES PASSARAM (treino)" else "$fl FALHA(S) (treino)")
 }

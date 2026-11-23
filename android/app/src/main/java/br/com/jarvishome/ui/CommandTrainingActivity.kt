@@ -12,6 +12,7 @@ import android.media.ToneGenerator
 import android.os.Bundle
 import android.view.Gravity
 import android.view.WindowManager
+import android.widget.Toast
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -148,9 +149,17 @@ class CommandTrainingActivity : Activity() {
                 setPadding(0, dp(8), 0, dp(8))
                 setOnLongClickListener {
                     if (ex.isEmpty()) return@setOnLongClickListener true
-                    AlertDialog.Builder(this@CommandTrainingActivity).setMessage("Apagar os ${ex.size} exemplos de “${c.label}”?")
-                        .setPositiveButton("Apagar") { _, _ -> trained.removeAll(ex.toSet()); save(); render() }
-                        .setNegativeButton("Cancelar", null).show()
+                    // escolhe um exemplo para apagar (ou todos)
+                    AlertDialog.Builder(this@CommandTrainingActivity)
+                        .setTitle("Exemplos de “${c.label}” — toque para apagar")
+                        .setItems(ex.map { "“${it.heard}”" }.toTypedArray()) { _, i ->
+                            val e = ex[i]
+                            AlertDialog.Builder(this@CommandTrainingActivity).setMessage("Apagar “${e.heard}”?")
+                                .setPositiveButton("Apagar") { _, _ -> trained.remove(e); save(); render() }
+                                .setNegativeButton("Cancelar", null).show()
+                        }
+                        .setNeutralButton("Apagar todos") { _, _ -> trained.removeAll(ex.toSet()); save(); render() }
+                        .setNegativeButton("Fechar", null).show()
                     true
                 }
             }
@@ -170,7 +179,7 @@ class CommandTrainingActivity : Activity() {
         }
         if (cmds.isNotEmpty()) list.addView(TextView(this).apply {
             setTextColor(faint); textSize = 12f; setPadding(0, dp(12), 0, 0)
-            text = "Toque longo num comando para apagar os exemplos dele. Os exemplos valem para as duas vozes: " +
+            text = "Toque longo num comando para ver e apagar um exemplo (ou todos). Os exemplos valem para as duas vozes: " +
                 "quando o Home Assistant escrever de novo o que ouviu no treino, o app já sabe o que fazer."
         })
     }

@@ -58,7 +58,7 @@ fun main() {
     c("Esta luz do quarto", "OFF luz_do_quarto", tr)
     c("pagar a sala", "OFF luz_da_sala", tr)
     c("apaga tudo", "OFF todas", tr)
-    c("liga a luz do quarto", "OFF luz_da_sala", tr) // idêntico ao gravado: vale o treino
+    c("liga a luz do quarto", "OFF luz_da_sala", tr) // idêntico ao gravado: vale o treino (a pessoa escolheu guardar)
     c("liga a luz do quarto já", "ON luz_do_quarto", tr) // parecido mas não idêntico: vale a frase
     c("desliga a luz do quarto", "OFF luz_do_quarto", tr)
     val conflict = listOf(Trained("liga a luz da sala", true, "light.luz_da_sala"), Trained("liga a luz da sala", false, "light.luz_da_sala"))

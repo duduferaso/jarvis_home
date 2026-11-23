@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.5**, com versionCode 46.
+O app é este repositório. A versão atual é a **1.15.6**, com versionCode 47.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
