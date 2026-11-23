@@ -18,7 +18,27 @@ object LightCommands {
 
     data class Light(val entityId: String, val name: String)
     data class Trained(val heard: String, val on: Boolean, val target: String)
-    class Action(val on: Boolean, val lights: List<Light>, val all: Boolean, val how: String, val place: String? = null)
+    /**
+     * [invert]: veio de um exemplo treinado, mas a frase não tem "liga"/"desliga" (o Whisper engoliu o verbo,
+     * ex.: "Obrigada, Jesus, da cozinha"). Quem executa decide pelo estado atual: acesa → apaga, apagada → acende.
+     */
+    class Action(val on: Boolean, val lights: List<Light>, val all: Boolean, val how: String, val place: String? = null,
+                 val invert: Boolean = false) {
+        /** A mesma ação com o liga/desliga decidido (para quando [invert]). */
+        fun withOn(v: Boolean) = Action(v, lights, all, how, place, false)
+    }
+
+    private val VERBS = listOf("liga", "ligar", "ligue", "desliga", "desligar", "desligue", "acende", "acender", "apaga", "apagar")
+
+    /**
+     * A frase tem "liga"/"acende"/"desliga"/"apaga" nas primeiras palavras — mesmo mal escrito pelo Whisper
+     * ("lisa luz do zoquart" = liga)? Se tiver, o exemplo treinado diz a direção; se não, inverte o estado.
+     */
+    fun hasVerb(text: String): Boolean {
+        val w = words(text)
+        if ((0 until minOf(w.size, 5)).any { polarityOf(w[it], w.getOrElse(it + 1) { "" }) != null }) return true
+        return w.take(3).any { x -> x.length >= 3 && VERBS.any { ratio(x, it) >= 0.7 } }
+    }
 
     /**
      * Cômodo da planta com as luzes escolhidas nele (as mesmas do toque na planta 2D/3D).
@@ -216,8 +236,9 @@ object LightCommands {
         if (top.value < 0.85) return null
         if (ranked.drop(1).any { it.value >= top.value - 0.05 }) return null
         val (on, target) = top.key
-        val action = if (target == ALL) Action(on, lights, true, "treino")
-            else Action(on, listOf(lights.firstOrNull { it.entityId == target } ?: return null), false, "treino")
+        val invert = !hasVerb(text)
+        val action = if (target == ALL) Action(on, lights, true, "treino", invert = invert)
+            else Action(on, listOf(lights.firstOrNull { it.entityId == target } ?: return null), false, "treino", invert = invert)
         return action to top.value
     }
 

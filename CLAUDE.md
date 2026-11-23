@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.7**, com versionCode 48.
+O app é este repositório. A versão atual é a **1.15.8**, com versionCode 49.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -82,6 +82,7 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
   - descarte de alucinações do Whisper ("Obrigado.", "Tchau", "Amara.org"), que reabre o microfone uma vez;
   - depois a ordem: desfazer → timers → treino → listas → previsão → agenda → correções aprendidas → corretor de nomes → luzes → agente do HA (com uma segunda tentativa corrigida).
 - **Só a chamada** (`only-wake-word`): o app reabre o microfone, no máximo uma vez seguida.
+- **Treino de comandos sem verbo:** se o exemplo treinado que bateu não tem "liga/desliga/acende/apaga" nem algo parecido nas 3 primeiras palavras ("Obrigada, Jesus, da cozinha"), `Action.invert` faz o backend ler o estado atual e inverter (acesa → apaga). Com verbo mal escrito ("lisa luz do zoquart" = liga), segue o treino. Tudo o que é gravado no treino é guardado (decisão do usuário); ele apaga exemplos um a um.
 - **Tela otimista:** luzes acionadas por toque ou voz mudam na tela na hora (`HomeModel.setLightOptimistic`) e voltam ao estado real se o HA não confirmar em 6 s.
 
 ## 4. Mapa do código
@@ -162,5 +163,4 @@ ANDROID_JAR=... KOTLINC=... tools/publicar_versao.sh
   - reconhecer quem está falando (o detector já sabe de qual pessoa é o exemplo);
   - perguntas gerais via agente de IA no HA;
   - atualização sem confirmação via modo Device Owner (Android 11 não permite atualização silenciosa de outro jeito). O usuário adiou: foco em funções e qualidade;
-  - treino de comandos: quando o exemplo que bateu não tem "liga"/"desliga" (ex.: "Obrigada, Jesus, da cozinha"), inverter o estado atual da luz em vez de seguir o treino.
 - **Documentação de uso** (configurações e comandos de voz): https://claude.ai/artifact/Rmkm3Jj6MtwPUhyChhESV3

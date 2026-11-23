@@ -559,9 +559,18 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         val lights = HaDirectBackend.lights
         val rooms = roomsFor(backend.floorMap, HaDirectBackend.relays)
         val fromSpoken = LightCommands.resolve(spoken, lights, backend.trained, rooms)
-        val action = fromSpoken
+        val resolved = fromSpoken
             ?: (if (text != spoken) LightCommands.resolve(text, lights, backend.trained, rooms) else null)
             ?: return false
+        // treino sem verbo ("Obrigada, Jesus, da cozinha"): inverte o estado atual da luz
+        val action = if (!resolved.invert) resolved else {
+            val anyOn = try {
+                val api = HomeApi(backend.base, backend.token)
+                resolved.lights.any { api.state(it.entityId)?.optString("state") == "on" }
+            } catch (e: Exception) { null }
+            if (anyOn == null) resolved.withOn(resolved.on).also { JLog.w("Estado da luz indisponível; seguindo o treino") }
+            else resolved.withOn(!anyOn).also { JLog.i("Treino sem verbo: luz estava " + (if (anyOn) "acesa → apaga" else "apagada → acende")) }
+        }
         val ids = action.lights.map { it.entityId }
         val ok = try {
             HomeApi(backend.base, backend.token).setPower(ids, action.on)
@@ -575,12 +584,12 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         JLog.i("Luz pelo app (${action.how}): “$spoken” → $label")
         val speech = if (ok) LightCommands.speech(action) else "Não consegui acionar a luz agora."
         onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard)
-            .put("local", label + if (action.how == "treino") " (treino)" else ""))
+            .put("local", label + if (action.how == "treino") (if (resolved.invert) " (treino, inverteu)" else " (treino)") else ""))
         onEvent(JSONObject().put("type", "response").put("text", speech)
             .put("response_type", if (ok) "action_done" else "error").put("continue_conversation", false))
         if (ok) LightCommands.onSet?.invoke(ids, action.on)
         // deu certo só depois da correção: a frase como foi ouvida passa a valer para essa luz
-        if (ok && fromSpoken == null && (action.all || action.lights.size == 1)) {
+        if (ok && fromSpoken == null && !resolved.invert && (action.all || action.lights.size == 1)) {
             try {
                 br.com.jarvishome.commands.Learning.onLearnLight?.invoke(spoken, action.on,
                     if (action.all) LightCommands.ALL else action.lights[0].entityId)
