@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.8**, com versionCode 49.
+O app é este repositório. A versão atual é a **1.15.9**, com versionCode 50.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -83,6 +83,7 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
   - depois a ordem: desfazer → timers → treino → listas → previsão → agenda → correções aprendidas → corretor de nomes → luzes → agente do HA (com uma segunda tentativa corrigida).
 - **Só a chamada** (`only-wake-word`): o app reabre o microfone, no máximo uma vez seguida.
 - **Treino de comandos sem verbo:** se o exemplo treinado que bateu não tem "liga/desliga/acende/apaga" nem algo parecido nas 3 primeiras palavras ("Obrigada, Jesus, da cozinha"), `Action.invert` faz o backend ler o estado atual e inverter (acesa → apaga). Com verbo mal escrito ("lisa luz do zoquart" = liga), segue o treino. Tudo o que é gravado no treino é guardado (decisão do usuário); ele apaga exemplos um a um.
+- **Só o nome da luz** ("luz da cozinha", "a luz do quarto de visita"): `LightCommands.nameOnly` devolve `invert` e o backend inverte o estado, como interruptor. Exige "luz/lâmpada" e nada além do nome (até 7 palavras); perguntas e outras palavras vão para o HA.
 - **Tela otimista:** luzes acionadas por toque ou voz mudam na tela na hora (`HomeModel.setLightOptimistic`) e voltam ao estado real se o HA não confirmar em 6 s.
 
 ## 4. Mapa do código

@@ -48,6 +48,14 @@ fun main() {
     ok(r("liga a luz do quarto de visita")?.let { LightCommands.speech(it) } == "Luz do quarto de visita ligada.", "resposta: ${r("liga a luz do quarto de visita")?.let { LightCommands.speech(it) }}")
     ok(r("desliga a luz do quarto 2")?.let { LightCommands.speech(it) } == "Luz do quarto 2 desligada.", "resposta: ${r("desliga a luz do quarto 2")?.let { LightCommands.speech(it) }}")
     ok(r("luz da sala em 50%") == null, "porcentagem continua com o Home Assistant")
+    // só o nome da luz: inverte o estado (como um interruptor)
+    for ((s, want) in listOf("luz da cozinha" to listOf("light.luz_da_cozinha"), "a luz do quarto" to listOf("light.luz_do_quarto"),
+            "luz do quarto de visita" to listOf("switch.sonoff_3"), "Luz da sala." to listOf("light.luz_da_sala"))) {
+        val x = r(s)
+        ok(x != null && x.invert && x.lights.map { it.entityId }.sorted() == want.sorted(), "só o nome \"$s\" inverte ${x?.lights?.map { it.entityId }}")
+    }
+    for (s in listOf("a luz da cozinha está acesa?", "qual a luz da cozinha", "cozinha", "luz", "luzes", "a luz da cozinha queimou", "todas as luzes"))
+        ok(r(s)?.invert != true, "não inverte: \"$s\" → ${r(s)?.let { (if (it.on) "on " else "off ") + it.lights.map { l -> l.entityId } }}")
     println(if (fl == 0) "TODOS OS TESTES PASSARAM" else "$fl FALHA(S)")
     treinoRelevante()
 }

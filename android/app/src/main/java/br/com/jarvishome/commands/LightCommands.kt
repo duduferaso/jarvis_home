@@ -152,7 +152,7 @@ object LightCommands {
             }
             i++
         }
-        if (pol == null) return null
+        if (pol == null) return nameOnly(w, lights, rooms)
         // pula o verbo (e o "liga" de "de liga")
         var start = pIdx + 1
         if (start < w.size && pol == P.OFF && w[pIdx] in setOf("de", "des", "dis", "this")) start++
@@ -188,6 +188,21 @@ object LightCommands {
             found.add(l ?: return null)
         }
         return Action(on, found.distinctBy { it.entityId }, false, if (viaRoom) "planta" else "frase", place)
+    }
+
+    /**
+     * Só o nome da luz, sem "liga"/"desliga": "luz da cozinha", "a luz do quarto de visita". Inverte o estado
+     * atual (acesa → apaga), como um interruptor. Precisa ter "luz"/"lâmpada" e nada além do nome — perguntas
+     * ("a luz da cozinha está acesa?") e frases com outras palavras continuam com o Home Assistant.
+     */
+    private fun nameOnly(w: List<String>, lights: List<Light>, rooms: List<Room>): Action? {
+        if (w.size > 7 || w.none { it.startsWith("luz") || it.startsWith("lampad") }) return null
+        val g = w.filter { it !in STOP }
+        if (g.isEmpty() || g.any { it in ALL_WORDS || it == "e" }) return null
+        val l = findLight(g, lights)
+        if (l != null && g.all { x -> keyOf(l).any { tokenMatch(x, it) } }) return Action(true, listOf(l), false, "nome", invert = true)
+        val room = findRoom(g, rooms) ?: return null
+        return Action(true, room.first.lights, false, "nome", if (room.first.lights.isNotEmpty()) room.second else null, invert = true)
     }
 
     private val NUMBER_WORDS = mapOf("um" to "1", "dois" to "2", "tres" to "3", "1" to "1", "2" to "2", "3" to "3")

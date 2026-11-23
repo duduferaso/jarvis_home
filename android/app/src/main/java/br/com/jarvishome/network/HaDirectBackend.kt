@@ -584,7 +584,11 @@ private class HaSession(private val backend: HaDirectBackend, private val sttOnl
         JLog.i("Luz pelo app (${action.how}): “$spoken” → $label")
         val speech = if (ok) LightCommands.speech(action) else "Não consegui acionar a luz agora."
         onEvent(JSONObject().put("type", "transcription").put("text", text).put("heard", heard)
-            .put("local", label + if (action.how == "treino") (if (resolved.invert) " (treino, inverteu)" else " (treino)") else ""))
+            .put("local", label + when {
+                action.how == "treino" -> if (resolved.invert) " (treino, inverteu)" else " (treino)"
+                resolved.invert -> " (só o nome: inverteu)"
+                else -> ""
+            }))
         onEvent(JSONObject().put("type", "response").put("text", speech)
             .put("response_type", if (ok) "action_done" else "error").put("continue_conversation", false))
         if (ok) LightCommands.onSet?.invoke(ids, action.on)
