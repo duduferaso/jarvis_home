@@ -173,6 +173,9 @@ class PersonalWakeWord(context: Context, private val set: TemplateSet,
         return best
     }
 
+    /** Alguém está falando agora (Silero). Bipe de alarme não conta como fala. */
+    fun speaking(): Boolean = try { vad.isSpeechDetected() } catch (_: Exception) { false }
+
     /** Chamar ao voltar à espera (o áudio no meio da conversa não foi analisado). */
     fun reset() {
         vad.reset()

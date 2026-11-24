@@ -186,6 +186,9 @@ class JarvisForegroundService : Service() {
     private lateinit var player: AudioPlayer
     private val main = Handler(Looper.getMainLooper())
     private val beeper = AlarmBeeper()
+    private val alarmHold = br.com.jarvishome.commands.AlarmHold()
+    /** A ativação atual parou um alarme tocando (silêncio depois dela não é "ativou sozinho"). */
+    @Volatile private var stoppedAlarm = false
 
     // ---------------------------------------------------------------- voz única
     /** Gera a voz do Home Assistant (Piper) em segundo plano, sem atrapalhar as conversas. */
@@ -239,12 +242,12 @@ class JarvisForegroundService : Service() {
             }
             val ringing = Timers.ringing()
             when {
-                ringing.isEmpty() -> beeper.stop()
+                ringing.isEmpty() -> { beeper.stop(); alarmHold.reset() }
                 ringing.all { now - it.ringingSince > 3 * 60_000 } -> {
                     JLog.i("Timer: ninguém parou em 3 minutos, silenciando")
                     Timers.stopRinging(); beeper.stop()
                 }
-                !beeper.playing && (mode == Mode.IDLE || mode == Mode.SLEEPING || now - ringing.minOf { it.ringingSince } > 8000) -> beeper.start()
+                !beeper.playing && alarmHold.canPlay(now) && (mode == Mode.IDLE || mode == Mode.SLEEPING || now - ringing.minOf { it.ringingSince } > 8000) -> beeper.start()
             }
             main.postDelayed(this, 1000)
         }
@@ -498,7 +501,8 @@ class JarvisForegroundService : Service() {
 
             when (mode) {
                 Mode.IDLE -> {
-                    vad.learnNoise(rms)
+                    // o bipe do alarme não é o barulho da sala (subia o piso e o comando depois não contava como fala)
+                    if (!beeper.playing) vad.learnNoise(rms)
                     if (resetWake) {
                         resetWake = false
                         try { personal?.reset() } catch (_: Exception) {}
@@ -509,6 +513,10 @@ class JarvisForegroundService : Service() {
                         for (i in 0 until n) floats[i] = frame[i] / 32768f
                         val hit = p.accept(floats, n)
                         StateBus.lastScore = p.lastDistance
+                        if (hit == null && beeper.playing && p.speaking() && alarmHold.speech(System.currentTimeMillis())) {
+                            beeper.stop()   // alguém falando: cala o toque para o "Hey Tony" chegar limpo; volta sozinho
+                            JLog.i("Alarme: alguém falando, toque em pausa")
+                        }
                         if (hit != null && System.currentTimeMillis() >= cooldownUntil) {
                             StateBus.lastWakeWord = PersonalStore.PHRASE + " (distância " +
                                 String.format(Locale.US, "%.3f", hit.distance) + ") às " + timeFmt.format(Date())
@@ -619,12 +627,14 @@ class JarvisForegroundService : Service() {
     }
 
     private fun beginListening(reason: String, preRoll: ByteArray?, alreadySpoke: Boolean = false, quietStart: Boolean = false) {
-        if (Timers.stopRinging()) {
+        val stopped = Timers.stopRinging()
+        if (stopped) {
             beeper.stop()
             JLog.i("Toque do timer parado ($reason)")
         }
         synchronized(lock) {
             if (mode != Mode.IDLE) return
+            stoppedAlarm = stopped
             JLog.i("Ativado por: $reason")
             if (reason != "toque") reopenStreak = 0
             mode = Mode.LISTENING
@@ -737,7 +747,7 @@ class JarvisForegroundService : Service() {
         // ativações sozinhas a cada vez.
         if (candidate != null && prefs.learnFromSuccess && executed && confirms) learnWake(candidate)
         // reforço negativo: ativou por um exemplo aprendido e não virou comando → esquece esse exemplo
-        if (byLearned != null && !executed && responseType != "query_answer" && code0(errCode) != "only-wake-word") {
+        if (byLearned != null && !stoppedAlarm && !executed && responseType != "query_answer" && code0(errCode) != "only-wake-word") {
             forgetLearned(byLearned)
         }
 
@@ -855,9 +865,11 @@ class JarvisForegroundService : Service() {
             }
             code == "stt-no-text-recognized" -> {
                 state = AssistantState.CONFUSED
-                display = "Não ouvi nenhum comando"
+                // "Hey Tony" só para parar o alarme: não é ativação à toa
+                display = if (stoppedAlarm) "Alarme desligado" else "Não ouvi nenhum comando"
                 // ativação pelo detector sem fala nenhuma = provavelmente acordou sozinho: volta em silêncio
-                if (lastActivationByDetector) noteEmptyActivation() else speech = "Desculpe, não ouvi."
+                if (stoppedAlarm) Unit
+                else if (lastActivationByDetector) noteEmptyActivation() else speech = "Desculpe, não ouvi."
             }
             code == "internal" -> {
                 display = "Erro interno do app (veja os logs)"

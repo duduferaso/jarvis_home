@@ -24,3 +24,7 @@ começo do trecho, exemplos aprendidos e fim do trecho) com limiar 0,20 sobre os
 de chamadas reais, e confere que as 13 chamadas continuam reconhecidas. Resultado: 0 disparos, menor
 distância da conversa 0,231. Também mostra o mecanismo do bug: um trecho de conversa aprendido como
 chamada dispara de novo, por isso o reforço só aprende com ação confirmada.
+
+`alarme_bancada.py` + `AlarmeBancada.kt` (1.15.11): "Hey Tony" por cima do toque do alarme do timer.
+Com o bipe 20 dB acima da voz, só 15% das chamadas paravam o alarme (pausa de 1,1 s entre os bipes).
+Com pausa de 2,6 s: 49%. Com a pausa + o toque calado por 3,5 s ao ouvir fala (`AlarmHold`): 71%.

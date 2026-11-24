@@ -9,7 +9,7 @@ import kotlin.math.sin
 
 /** Toque do timer/alarme: "bip-bip-bip … pausa", em loop, no volume de alarme. */
 class AlarmBeeper {
-    private var track: AudioTrack? = null
+    @Volatile private var track: AudioTrack? = null
 
     val playing get() = track != null
 
@@ -27,7 +27,9 @@ class AlarmBeeper {
             }
             fun silence(ms: Int) = repeat(rate * ms / 1000) { pattern.add(0) }
             repeat(3) { tone(160, 1046.5); silence(110) }
-            silence(1100) // pausa: dá para falar "Hey Tony, para"
+            // pausa longa: o "Hey Tony" (~0,9 s) cabe entre os bipes. Com 1,1 s quase sempre um bipe
+            // caía em cima da chamada e só o toque na tela parava o alarme (ver AlarmHold).
+            silence(2600)
             val data = pattern.toShortArray()
             val t = AudioTrack.Builder()
                 .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
