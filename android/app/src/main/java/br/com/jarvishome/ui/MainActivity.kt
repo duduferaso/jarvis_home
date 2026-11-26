@@ -308,6 +308,14 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
         val ringing = Timers.ringing()
         val list = Timers.all().filter { it.ringingSince == 0L }
         val w = br.com.jarvishome.commands.Workout.state(now)
+        val workoutActive = br.com.jarvishome.commands.Workout.active
+        if (workoutActive != workoutWasActive) {
+            workoutWasActive = workoutActive
+            // acabou o treino: tela acesa mais um minuto antes do modo noite
+            if (!workoutActive) awakeUntil = maxOf(awakeUntil, now + br.com.jarvishome.commands.ScreenRules.AFTER_WORKOUT_MS)
+            applyKeepOn()
+            refreshNight()
+        } else if (workoutActive && nightDim) refreshNight()
         when {
             w != null && ringing.isEmpty() -> {
                 timerView.visibility = View.VISIBLE
@@ -354,11 +362,23 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     // ---------------------------------------------------------------- janela
 
     private fun applyWindowPrefs() {
-        if (prefs.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        keepOnApplied = null
+        applyKeepOn()
         clock.visibility = if (prefs.showClock) View.VISIBLE else View.INVISIBLE
         setBrightness(force = true)
         hideSystemBars()
+    }
+
+    private var keepOnApplied: Boolean? = null
+    private var workoutWasActive = false
+
+    /** Treino em andamento mantém a tela ligada mesmo com "Manter tela ligada" desligado. */
+    private fun applyKeepOn() {
+        val on = br.com.jarvishome.commands.ScreenRules.keepOn(prefs.keepScreenOn, br.com.jarvishome.commands.Workout.active)
+        if (on == keepOnApplied) return
+        keepOnApplied = on
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
     private var lastBrightness = -2f
@@ -396,7 +416,8 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
     private fun quietState() = StateBus.state == AssistantState.IDLE || StateBus.state == AssistantState.SLEEPING
 
     private fun refreshNight() {
-        val night = Night.isNight(prefs) && System.currentTimeMillis() > awakeUntil && quietState()
+        val night = br.com.jarvishome.commands.ScreenRules.dim(Night.isNight(prefs), System.currentTimeMillis(), awakeUntil,
+            quietState(), br.com.jarvishome.commands.Workout.active, Timers.isRinging())
         if (night != nightDim) {
             nightDim = night
             JLog.i(if (night) "Modo noite: tela no mínimo" else "Tela acesa")

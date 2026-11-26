@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.11**, com versionCode 52.
+O app é este repositório. A versão atual é a **1.15.12**, com versionCode 53.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -86,6 +86,7 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
 - **Treino de comandos sem verbo:** se o exemplo treinado que bateu não tem "liga/desliga/acende/apaga" nem algo parecido nas 3 primeiras palavras ("Obrigada, Jesus, da cozinha"), `Action.invert` faz o backend ler o estado atual e inverter (acesa → apaga). Com verbo mal escrito ("lisa luz do zoquart" = liga), segue o treino. Tudo o que é gravado no treino é guardado (decisão do usuário); ele apaga exemplos um a um.
 - **Só o nome da luz** ("luz da cozinha", "a luz do quarto de visita"): `LightCommands.nameOnly` devolve `invert` e o backend inverte o estado, como interruptor. Exige "luz/lâmpada" e nada além do nome (até 7 palavras); perguntas e outras palavras vão para o HA.
 - **Alarme do timer:** qualquer ativação ("Hey Tony" ou toque) para o toque. O toque (`AlarmBeeper`) tem 3 bipes e 2,6 s de pausa. Enquanto toca, se o Silero ouve fala, `AlarmHold` cala o toque por 3,5 s para a chamada chegar limpa; depois toca pelo menos uma rodada antes de calar de novo (TV não deixa o alarme mudo). Até a 1.15.10 o bipe caía em cima da chamada e só o toque na tela parava (bancada: 15% → 71% com bipe 20 dB acima da voz). Silêncio depois de parar o alarme não conta como ativação à toa. Os bipes não entram no piso de ruído do VAD.
+- **Tela durante o treino:** treino em andamento ou alarme tocando não deixam o modo noite escurecer a tela, e o treino mantém a tela ligada mesmo com "Manter tela ligada" desligado (`ScreenRules`, usado pela `MainActivity`). Ao fim do treino, a tela fica acesa mais 1 min.
 - **Tela otimista:** luzes acionadas por toque ou voz mudam na tela na hora (`HomeModel.setLightOptimistic`) e voltam ao estado real se o HA não confirmar em 6 s.
 
 ## 4. Mapa do código
@@ -98,7 +99,7 @@ Os arquivos ficam em `android/app/src/main/java/br/com/jarvishome/`:
 | `wakeword/` | `PersonalWakeWord` (detector + `PersonalStore`: exemplos em `files/personal/vozes.tpl`, aprendidos em `aprendidos.tpl`), `PersonalDetector` (log-mel + DTW, `WakeMatch`, `SegmentEnd`, `TakeTrim`), `WakeWords` (só "Hey Tony") |
 | `audio/` | `VoiceActivityDetector`, `AudioPlayer` (MediaPlayer na voz do HA, bipe, TTS Android de reserva) |
 | `network/` | `HaDirectBackend` (sessão de voz), `MiniWebSocket`, `TextCorrector` (normalização, tirar a chamada, correção por vocabulário), `CommandMatcher`, `Backend`/`Backends` (fábrica a partir das Prefs), `JarvisApi` (orquestrador opcional) |
-| `commands/` | Lógica pura, testável na JVM: `LightCommands` (luzes, treino, cômodos da planta via `Room`), `Timers`, `AlarmHold`, `Workout`, `Lists`, `Learning` (correções aprendidas, desfazer, filtro de alucinação) |
+| `commands/` | Lógica pura, testável na JVM: `LightCommands` (luzes, treino, cômodos da planta via `Room`), `Timers`, `AlarmHold`, `ScreenRules`, `Workout`, `Lists`, `Learning` (correções aprendidas, desfazer, filtro de alucinação) |
 | `home/` | `HomeApi` (REST), `HomeParser` (estados → tela), `HomeModel` (estado da tela + `Night`), `HomeMonitor` (leitura periódica, avisos, checagem de atualização), `FloorPlan` (planta, cômodos, nomes falados, mapeamento de relés), `Forecast`, `LightControl` (único caminho de liga/desliga da tela) |
 | `calendar/` | `CalendarParser` (frases → evento), `CalendarAssistant`, `CalendarModel` |
 | `settings/` | `Prefs` (SharedPreferences "jarvis"), `Backup` (exportar e importar treino de voz e configurações), `Provisioning` (`assets/provision.json` só em builds locais), `SecureStore` |
