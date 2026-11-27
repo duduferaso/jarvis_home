@@ -1,0 +1,8 @@
+{
+  "versionCode": 54,
+  "versionName": "1.16.0",
+  "notes": "Preparação para o Home Control (app novo): “Exportar para o Home Control” leva planta, funções, voz, comandos e ajustes no formato novo; “Trocar para o Home Control” e pausa total (solta o microfone, não lê avisos, não toca timers, não inicia sozinho) para os dois apps conviverem no Redmi.",
+  "apk": "JarvisHome-1.16.0-54.apk",
+  "size": 9634974,
+  "sha256": "6acd840e084506ff0be97bb1bcf465526a3bb38bfa9c6ea0910f1f3173d54bb6"
+}
