@@ -241,6 +241,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("speak_at_night", false)
         set(v) = sp.edit().putBoolean("speak_at_night", v).apply()
 
+    /** Pausa total: o app novo (Home Control) está usando o Redmi; este não ouve, não fala e não inicia sozinho. */
+    var pausedForOther: Boolean
+        get() = sp.getBoolean("paused_for_other", false)
+        set(v) = sp.edit().putBoolean("paused_for_other", v).apply()
+
     // ---- agenda
     var calendarEnabled: Boolean
         get() = sp.getBoolean("calendar_enabled", true)

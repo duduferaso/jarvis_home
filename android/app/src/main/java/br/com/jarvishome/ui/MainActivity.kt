@@ -235,9 +235,19 @@ class MainActivity : Activity(), StateBus.Listener, HomeModel.Listener {
 
     // ---------------------------------------------------------------- ciclo de vida
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        if (intent != null) setIntent(intent)
+    }
+
     override fun onResume() {
         super.onResume()
         prefs = Prefs(this)
+        // aberto pelo Home Control ("Trocar para o Jarvis"): sai da pausa total; o serviço pede ao outro que pause
+        if (intent?.getBooleanExtra("vindo_do_home_control", false) == true) {
+            intent.removeExtra("vindo_do_home_control")
+            if (prefs.pausedForOther) JarvisForegroundService.send(this, JarvisForegroundService.ACTION_RESUME_TOTAL)
+        }
         face.reduceMotion = prefs.reduceMotion
         awakeUntil = System.currentTimeMillis() + 60_000
         StateBus.addListener(this)

@@ -20,6 +20,7 @@ class BootReceiver : BroadcastReceiver() {
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val prefs = Prefs(context)
         if (!prefs.startOnBoot) return
+        if (prefs.pausedForOther) { JLog.i("Pausa total: não inicia sozinho (Home Control ativo)"); return }
         if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
         try {
             JarvisForegroundService.send(context, JarvisForegroundService.ACTION_START)

@@ -2,7 +2,7 @@
 
 Assistente de voz da casa, em português, rodando num **Redmi 10 fixo na parede** (Android 11, arm64).
 Ele fala **direto com o Home Assistant** do homelab, sem servidor próprio no meio.
-O app é este repositório. A versão atual é a **1.15.12**, com versionCode 53.
+O app é este repositório. A versão atual é a **1.16.0**, com versionCode 54.
 
 > O `README.md` é da v1.5 e está desatualizado. Vale este arquivo.
 
@@ -89,20 +89,29 @@ O endereço é `http://192.168.18.108:8123`. O app usa o usuário **`jarvis`, se
 - **Tela durante o treino:** treino em andamento ou alarme tocando não deixam o modo noite escurecer a tela, e o treino mantém a tela ligada mesmo com "Manter tela ligada" desligado (`ScreenRules`, usado pela `MainActivity`). Ao fim do treino, a tela fica acesa mais 1 min.
 - **Tela otimista:** luzes acionadas por toque ou voz mudam na tela na hora (`HomeModel.setLightOptimistic`) e voltam ao estado real se o HA não confirmar em 6 s.
 
+## 3b. Transição para o Home Control (app novo)
+
+O projeto está sendo aberto como **Home Control** em `github.com/duduferaso/ha_local_assistant` (id `io.github.duduferaso.halocalassistant`, chave de assinatura própria). Plano: `docs/PLANO.md` de lá. Este app recebe só correções e o que a transição precisa; funções grandes vão para o novo.
+
+- **Exportar para o Home Control** (Engrenagem → Sistema): `Backup.exportPacote` monta o pacote de configuração (formato 1, especificado em `docs/pacote-configuracao.md` do repositório novo) com `settings/PacoteConfig` (puro). Leva conexão, voz (`vozes.tpl`/`aprendidos.tpl` em base64; sem treino, os de fábrica), módulos e ajustes, e a planta convertida.
+- **Planta no formato novo:** `home/Planta` (puro) converte `FloorPlan` para `planta.json` e calcula paredes a partir dos cômodos (bordas entre cômodos não integrados + contorno, menos portas). A conversão gera exatamente as 14 paredes de hoje (`tests/jvm_planta/PlantaFormatoTest.kt`).
+- **Pausa total** (`Prefs.pausedForOther`): os dois apps convivem no Redmi, um ativo por vez. Em pausa: repouso (microfone solto), `HomeMonitor` não lê nem apaga avisos e não fala lembretes, timers não tocam (fim só na tela), `BootReceiver` não inicia. "Trocar para o Home Control" pausa e abre o outro. Tocar e segurar no rosto sai da pausa e manda o broadcast `io.github.duduferaso.halocalassistant.PAUSAR`; o outro manda `br.com.jarvishome.PAUSAR` (`PauseReceiver`). Aberto com o extra `vindo_do_home_control`, sai da pausa.
+- Correções feitas aqui também vão para o `ha_local_assistant`, citando o commit.
+
 ## 4. Mapa do código
 
 Os arquivos ficam em `android/app/src/main/java/br/com/jarvishome/`:
 
 | Pacote | Arquivos e papel |
 |---|---|
-| `service/` | `JarvisForegroundService` (microfone, estados, sessões, falas, timers, aprendizado), `WorkoutCoach` (treino por voz), `AlarmBeeper`, `BootReceiver` |
+| `service/` | `JarvisForegroundService` (microfone, estados, sessões, falas, timers, aprendizado), `WorkoutCoach` (treino por voz), `AlarmBeeper`, `BootReceiver`, `PauseReceiver` |
 | `wakeword/` | `PersonalWakeWord` (detector + `PersonalStore`: exemplos em `files/personal/vozes.tpl`, aprendidos em `aprendidos.tpl`), `PersonalDetector` (log-mel + DTW, `WakeMatch`, `SegmentEnd`, `TakeTrim`), `WakeWords` (só "Hey Tony") |
 | `audio/` | `VoiceActivityDetector`, `AudioPlayer` (MediaPlayer na voz do HA, bipe, TTS Android de reserva) |
 | `network/` | `HaDirectBackend` (sessão de voz), `MiniWebSocket`, `TextCorrector` (normalização, tirar a chamada, correção por vocabulário), `CommandMatcher`, `Backend`/`Backends` (fábrica a partir das Prefs), `JarvisApi` (orquestrador opcional) |
 | `commands/` | Lógica pura, testável na JVM: `LightCommands` (luzes, treino, cômodos da planta via `Room`), `Timers`, `AlarmHold`, `ScreenRules`, `Workout`, `Lists`, `Learning` (correções aprendidas, desfazer, filtro de alucinação) |
-| `home/` | `HomeApi` (REST), `HomeParser` (estados → tela), `HomeModel` (estado da tela + `Night`), `HomeMonitor` (leitura periódica, avisos, checagem de atualização), `FloorPlan` (planta, cômodos, nomes falados, mapeamento de relés), `Forecast`, `LightControl` (único caminho de liga/desliga da tela) |
+| `home/` | `HomeApi` (REST), `HomeParser` (estados → tela), `HomeModel` (estado da tela + `Night`), `HomeMonitor` (leitura periódica, avisos, checagem de atualização), `FloorPlan` (planta, cômodos, nomes falados, mapeamento de relés), `Planta` (formato novo planta.json e paredes), `Forecast`, `LightControl` (único caminho de liga/desliga da tela) |
 | `calendar/` | `CalendarParser` (frases → evento), `CalendarAssistant`, `CalendarModel` |
-| `settings/` | `Prefs` (SharedPreferences "jarvis"), `Backup` (exportar e importar treino de voz e configurações), `Provisioning` (`assets/provision.json` só em builds locais), `SecureStore` |
+| `settings/` | `Prefs` (SharedPreferences "jarvis"), `Backup` (exportar e importar treino de voz e configurações; pacote para o Home Control), `PacoteConfig`, `Provisioning` (`assets/provision.json` só em builds locais), `SecureStore` |
 | `ui/` | `MainActivity`, `SettingsActivity` (abas Conexão/Voz/Comandos/Agenda/Tela/Sistema), `FloorPlanView` (isométrica em Canvas), `CharacterView`, `VoiceTrainingActivity`, `CommandTrainingActivity`, `AgendaActivity`, `WorkoutActivity` |
 | `update/` | `Updater`, `UpdateFlow`, `ApkInstaller` (PackageInstaller) |
 | `domain/` | `StateBus`, `JLog`, `CommandHistory` ("Últimos comandos"), `CrashLog` |

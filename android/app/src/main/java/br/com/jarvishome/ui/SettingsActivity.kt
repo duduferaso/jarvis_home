@@ -185,10 +185,12 @@ class SettingsActivity : Activity() {
             "Tela e terminal" to "Tela",
             "Diagnóstico" to "Sistema",
             "Cópia dos treinos de voz" to "Sistema",
+            "Home Control (app novo)" to "Sistema",
             "Atualizações" to "Sistema"
         )
         private const val REQ_EXPORT = 701
         private const val REQ_IMPORT = 702
+        private const val REQ_EXPORT_PACOTE = 703
         /** Volta na mesma aba ao reabrir (ex.: depois de treinar a voz). */
         private var lastTab = "Conexão"
     }
@@ -640,6 +642,35 @@ class SettingsActivity : Activity() {
             }
         }
 
+        section("Home Control (app novo)")
+        note("O Home Control é a versão nova e aberta deste app. Os dois podem ficar instalados neste celular, " +
+            "um ativo por vez: o que fica em pausa total solta o microfone, não lê os avisos do Home Assistant, " +
+            "não toca timers e não inicia sozinho.")
+        note("Exporte o pacote e importe no Home Control: ele leva a planta, as funções ligadas, a voz, " +
+            "os comandos treinados e os ajustes.")
+        button("Exportar para o Home Control") {
+            save()
+            AlertDialog.Builder(this).setTitle("Exportar pacote")
+                .setMessage("Incluir o token do Home Assistant?\n\nCom o token, o Home Control já conecta sozinho, " +
+                    "mas quem tiver o arquivo consegue controlar a casa.")
+                .setPositiveButton("Sem token") { _, _ -> startExportPacote(false) }
+                .setNeutralButton("Com token") { _, _ -> startExportPacote(true) }
+                .setNegativeButton("Cancelar", null).show()
+        }
+        button("Trocar para o Home Control") {
+            val launch = packageManager.getLaunchIntentForPackage(JarvisForegroundService.OTHER_PACKAGE)
+            if (launch == null) {
+                Toast.makeText(this, "O Home Control ainda não está instalado neste celular.", Toast.LENGTH_LONG).show()
+            } else {
+                save()
+                JarvisForegroundService.send(this, JarvisForegroundService.ACTION_PAUSE_TOTAL)
+                startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra("vindo_do_jarvis", true))
+                finish()
+            }
+        }
+        note(if (prefs.pausedForOther) "Agora: em pausa total. Para voltar, toque e segure no rosto na tela principal."
+            else "Agora: este app está ativo.")
+
         section("Diagnóstico")
         diag = note("")
         micBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }
@@ -788,6 +819,15 @@ class SettingsActivity : Activity() {
 
     private var exportWithToken = false
 
+    private fun startExportPacote(withToken: Boolean) {
+        exportWithToken = withToken
+        val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json").putExtra(Intent.EXTRA_TITLE, br.com.jarvishome.settings.Backup.pacoteFileName())
+        try { startActivityForResult(i, REQ_EXPORT_PACOTE) } catch (e: Exception) {
+            Toast.makeText(this, "Não achei um app de arquivos", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun startExport(withToken: Boolean) {
         exportWithToken = withToken
         val i = Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
@@ -810,6 +850,16 @@ class SettingsActivity : Activity() {
                     "Cópia salva. Guarde o arquivo" + if (exportWithToken) " em lugar seguro (tem o token)." else "."
                 } catch (e: Throwable) {
                     JLog.w("Falha ao exportar", e); "Não consegui salvar: " + (e.message ?: e.javaClass.simpleName)
+                }
+                handler.post { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
+            }.start()
+            REQ_EXPORT_PACOTE -> Thread {
+                val msg = try {
+                    val text = br.com.jarvishome.settings.Backup.exportPacote(this, exportWithToken)
+                    contentResolver.openOutputStream(uri, "wt")!!.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                    "Pacote salvo. Importe no Home Control" + if (exportWithToken) " e guarde o arquivo em lugar seguro (tem o token)." else "."
+                } catch (e: Throwable) {
+                    JLog.w("Falha ao exportar o pacote", e); "Não consegui salvar: " + (e.message ?: e.javaClass.simpleName)
                 }
                 handler.post { Toast.makeText(this, msg, Toast.LENGTH_LONG).show() }
             }.start()

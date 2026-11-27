@@ -133,7 +133,8 @@ object HomeMonitor {
 
         val text = snap.announcement
         val entity = snap.announcementEntity
-        if (text != null && entity != null) {
+        // pausa total: o Home Control (app novo) é quem lê e apaga os avisos
+        if (text != null && entity != null && !p.pausedForOther) {
             val cleared = try { api.setText(entity, ""); true } catch (e: Exception) {
                 JLog.w("Não consegui limpar $entity", e); false
             }
@@ -236,6 +237,7 @@ object HomeMonitor {
 
     /** Fala "Lembrete: …" quando um compromisso com hora começa (ou X minutos antes). */
     private fun checkReminders(p: Prefs) {
+        if (p.pausedForOther) return  // pausa total: os lembretes ficam com o Home Control
         val now = LocalDateTime.now()
         for (e in HomeModel.agenda) {
             if (e.allDay) continue

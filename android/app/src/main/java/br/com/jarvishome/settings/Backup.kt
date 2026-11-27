@@ -63,6 +63,52 @@ object Backup {
         return root.toString(1)
     }
 
+    // ------------------------------------------------------------------ pacote para o app novo
+
+    fun pacoteFileName(): String = "home-control-pacote-" + SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date()) + ".json"
+
+    /**
+     * Pacote de configuração no formato do Home Control (app novo, ha_local_assistant): planta convertida,
+     * chaves de cada função, voz, comandos treinados e ajustes. O token só vai se a pessoa pedir.
+     */
+    fun exportPacote(context: Context, includeToken: Boolean): String {
+        val app = context.applicationContext
+        val p = Prefs(app)
+        val ajustes = mapOf<String, Any?>(
+            "server_url" to p.serverUrl, "pipeline_id" to p.pipelineId,
+            "local_lights" to p.localLights, "show_lights" to p.showLights, "trained_commands" to p.trainedCommands,
+            "correct_text" to p.correctText, "extra_vocabulary" to p.extraVocabulary, "show_floor_plan" to p.showFloorPlan,
+            "calendar_enabled" to p.calendarEnabled, "show_agenda" to p.showAgenda, "calendar_write" to p.calendarWrite,
+            "agenda_reminders" to p.agendaReminders, "reminder_lead" to p.reminderLeadMin,
+            "lists_enabled" to p.listsEnabled, "shopping_list" to p.shoppingList, "tasks_list" to p.tasksList,
+            "show_weather" to p.showWeather,
+            "workout_min" to p.workoutMin, "workout_work" to p.workoutWork, "workout_rest" to p.workoutRest,
+            "workout_series" to p.workoutSeries, "workout_count" to p.workoutCount, "workout_exercises" to p.workoutExercises,
+            "learn_from_success" to p.learnFromSuccess, "beep" to p.beep, "volume" to p.volume, "silence_ms" to p.silenceMs,
+            "night_mode" to p.nightMode, "night_start" to p.nightStart, "night_end" to p.nightEnd,
+            "quiet_at_night" to p.quietAtNight, "night_volume" to p.nightVolume, "speak_at_night" to p.speakAtNight,
+            "keep_screen_on" to p.keepScreenOn, "dim_screen" to p.dimScreen, "show_clock" to p.showClock,
+            "reduce_motion" to p.reduceMotion, "start_on_boot" to p.startOnBoot, "auto_update" to p.autoUpdate,
+            "learned_fixes" to p.learnedFixes, "server_temp_limit" to p.serverTempLimit, "server_sensors" to p.serverSensors
+        )
+        val arquivos = HashMap<String, ByteArray>()
+        for (name in FILES) {
+            val f = File(app.filesDir, name)
+            if (f.exists()) arquivos[name] = f.readBytes()
+        }
+        // nunca treinou neste celular: leva os exemplos de fábrica, que são os que estão em uso
+        if ("personal/vozes.tpl" !in arquivos) try {
+            arquivos["personal/vozes.tpl"] = app.assets.open("personal/hey_tony.tpl").use { it.readBytes() }
+        } catch (_: Exception) {}
+        val planta = br.com.jarvishome.home.Planta.daPlantaAtual(br.com.jarvishome.home.FloorPlan.decode(p.floorMap))
+        val version = try { app.packageManager.getPackageInfo(app.packageName, 0).versionName } catch (e: Exception) { "?" }
+        val criado = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date())
+        val o = PacoteConfig.montar(PacoteConfig.Fonte(ajustes, arquivos, planta, version ?: "?", criado,
+            if (includeToken) p.token else null))
+        JLog.i("Pacote para o Home Control exportado" + if (includeToken) " (com token)" else "")
+        return o.toString(1)
+    }
+
     /** Restaura a cópia. Lança exceção com mensagem clara se o arquivo não for uma cópia do Jarvis. */
     fun import(context: Context, text: String): Summary {
         val app = context.applicationContext

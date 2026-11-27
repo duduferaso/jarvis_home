@@ -238,7 +238,8 @@ class JarvisForegroundService : Service() {
             val now = System.currentTimeMillis()
             for (i in Timers.due(now)) {
                 JLog.i("Timer acabou: " + Timers.name(i))
-                announce(Timers.finishedPhrase(i), requested = true)
+                if (prefs.pausedForOther) HomeModel.setAnnouncement(Timers.finishedPhrase(i)) // em pausa total: só na tela
+                else announce(Timers.finishedPhrase(i), requested = true)
             }
             val ringing = Timers.ringing()
             when {
@@ -247,6 +248,7 @@ class JarvisForegroundService : Service() {
                     JLog.i("Timer: ninguém parou em 3 minutos, silenciando")
                     Timers.stopRinging(); beeper.stop()
                 }
+                prefs.pausedForOther -> beeper.stop()
                 !beeper.playing && alarmHold.canPlay(now) && (mode == Mode.IDLE || mode == Mode.SLEEPING || now - ringing.minOf { it.ringingSince } > 8000) -> beeper.start()
             }
             main.postDelayed(this, 1000)
@@ -313,6 +315,8 @@ class JarvisForegroundService : Service() {
             ACTION_SLEEP -> setSleeping(true)
             ACTION_WAKE -> setSleeping(false)
             ACTION_TOGGLE_SLEEP -> setSleeping(mode != Mode.SLEEPING)
+            ACTION_PAUSE_TOTAL -> pauseTotal(true)
+            ACTION_RESUME_TOTAL -> pauseTotal(false)
             ACTION_RELOAD -> reload()
             ACTION_TEST_VOICE -> {
                 player.beep(prefs.beep, Night.beepVolume(prefs))
@@ -338,7 +342,7 @@ class JarvisForegroundService : Service() {
             }
         }
         if (mode == Mode.SLEEPING) {
-            StateBus.setState(AssistantState.SLEEPING, "Toque e segure no rosto para acordar")
+            StateBus.setState(AssistantState.SLEEPING, sleepMessage())
         } else if (!running && !paused) {
             startAudio()
             goIdle()
@@ -387,6 +391,24 @@ class JarvisForegroundService : Service() {
         }
     }
 
+    private fun sleepMessage() =
+        if (prefs.pausedForOther) "Em pausa: o Home Control está usando o microfone. Toque e segure no rosto para voltar."
+        else "Toque e segure no rosto para acordar"
+
+    /**
+     * Pausa total, para o app novo (Home Control) usar o Redmi: solta o microfone, para de ler os avisos do HA,
+     * não toca timers e não inicia sozinho com o celular. Voltar daqui pede ao outro app que pause.
+     */
+    private fun pauseTotal(on: Boolean) {
+        if (on) {
+            if (Timers.all().isNotEmpty()) HomeModel.setAnnouncement("Timers deste app ficam em silêncio durante a pausa")
+            prefs.pausedForOther = true
+            beeper.stop()
+            setSleeping(true)
+            JLog.i("Pausa total: o Home Control fica com o microfone")
+        } else setSleeping(false)
+    }
+
     private fun setSleeping(sleep: Boolean) {
         if (sleep) {
             prefs.assistantEnabled = false
@@ -395,9 +417,14 @@ class JarvisForegroundService : Service() {
             player.stop()
             mode = Mode.SLEEPING
             stopAudio()
-            StateBus.setState(AssistantState.SLEEPING, "Toque e segure no rosto para acordar")
+            StateBus.setState(AssistantState.SLEEPING, sleepMessage())
             JLog.i("Assistente em repouso (microfone desligado)")
         } else {
+            if (prefs.pausedForOther) {
+                prefs.pausedForOther = false
+                askOtherToPause(this)
+                JLog.i("Saiu da pausa total; pedindo ao Home Control que pause")
+            }
             prefs.assistantEnabled = true
             if (mode == Mode.SLEEPING) mode = Mode.IDLE
             startAudio()
@@ -1020,6 +1047,19 @@ class JarvisForegroundService : Service() {
         const val ACTION_STOP = "br.com.jarvishome.STOP"
         const val ACTION_PAUSE_MIC = "br.com.jarvishome.PAUSE_MIC"
         const val ACTION_RESUME_MIC = "br.com.jarvishome.RESUME_MIC"
+        const val ACTION_PAUSE_TOTAL = "br.com.jarvishome.PAUSE_TOTAL"
+        const val ACTION_RESUME_TOTAL = "br.com.jarvishome.RESUME_TOTAL"
+
+        /** App novo (ha_local_assistant): os dois convivem no Redmi, um ativo por vez. */
+        const val OTHER_PACKAGE = "io.github.duduferaso.halocalassistant"
+        /** Pedido do outro app para este pausar (recebido por PauseReceiver). */
+        const val BROADCAST_PAUSE_ME = "br.com.jarvishome.PAUSAR"
+        /** Pedido deste app para o outro pausar. */
+        const val BROADCAST_PAUSE_OTHER = "io.github.duduferaso.halocalassistant.PAUSAR"
+
+        fun askOtherToPause(context: Context) {
+            try { context.sendBroadcast(Intent(BROADCAST_PAUSE_OTHER).setPackage(OTHER_PACKAGE)) } catch (_: Exception) {}
+        }
 
         private const val CHANNEL_ID = "jarvis_service"
         private const val NOTIFICATION_ID = 42

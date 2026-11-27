@@ -27,6 +27,10 @@ class JSONArray() {
     fun length() = list.size
     fun optJSONObject(i: Int): JSONObject? = list.getOrNull(i) as? JSONObject
     fun optString(i: Int): String = list.getOrNull(i)?.toString() ?: ""
+    fun optDouble(i: Int, d: Double = Double.NaN): Double = (list.getOrNull(i) as? Number)?.toDouble() ?: d
+    fun optInt(i: Int, d: Int = 0): Int = (list.getOrNull(i) as? Number)?.toInt() ?: d
+    fun optJSONArray(i: Int): JSONArray? = list.getOrNull(i) as? JSONArray
+    fun getJSONObject(i: Int): JSONObject = list[i] as? JSONObject ?: throw IllegalArgumentException("não é objeto: $i")
     fun put(v: Any?): JSONArray { list.add(v); return this }
     override fun toString() = list.joinToString(",", "[", "]") { JSONObject.enc(it) }
 }

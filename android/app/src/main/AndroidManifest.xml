@@ -12,6 +12,11 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Android 11+: para achar e abrir o Home Control (app novo) instalado no mesmo celular -->
+    <queries>
+        <package android:name="io.github.duduferaso.halocalassistant" />
+    </queries>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
@@ -90,6 +95,14 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- o Home Control (app novo) pede a pausa total quando volta a ser usado -->
+        <receiver
+            android:name=".service.PauseReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="br.com.jarvishome.PAUSAR" />
             </intent-filter>
         </receiver>
         <receiver
