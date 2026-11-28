@@ -137,7 +137,7 @@ async def service(request):
         if "return_response" not in request.query:
             return web.json_response({"message": "Service call requires responses but caller did not ask for responses"}, status=400)
         import datetime as _dt
-        base = _dt.date.today()
+        base = _dt.datetime.now(TZ).date()  # "hoje" no fuso da casa, não no do servidor
         fc = [{"condition": c, "datetime": (base + _dt.timedelta(days=i)).isoformat() + "T15:00:00+00:00",
                "temperature": 25 + i, "templow": 18, "precipitation_probability": p}
               for i, (c, p) in enumerate([("sunny", 0), ("rainy", 85), ("cloudy", 20), ("sunny", 5), ("sunny", 0)])]
